@@ -3,13 +3,13 @@
   "source": {
     "repository": "https://github.com/mengjiu-cao/app-modules",
     "branch": "arlan/smartx-native-list",
-    "commit": "ffa06282066f39d9077318bf74f4787a23d72cba",
+    "commit": "e3ff9ccade7dbe30498dbc2b6ed0f3c0ef280c99",
     "upstreamBaseline": "f11ac08bf1278a31345829d9e245015d52035df4",
     "selectedUpstreamCommits": [
       "5e94f3bd057ca054ae14153e1fa893d3ae1d0eb5"
     ],
     "dirty": false,
-    "inputDigest": "e30ab864f94a4fa8325b926c47734b2e2ec5e790719b2df714531fea10cee561"
+    "inputDigest": "c1e99ce63ee56e65dd038fc870ecd8cc81ed30018cae2cf613ec035899aa40ee"
   },
   "generators": {
     "node": "v24.21.0",
@@ -41,7 +41,7 @@
       "name": "@onekeyfe/react-native-native-list",
       "path": "native-views/react-native-native-list",
       "version": "3.0.165",
-      "files": 379
+      "files": 381
     }
   ],
   "resources": [],
@@ -378,7 +378,7 @@
     "native-views/react-native-native-list/docs/images/row-wallet-group.svg": "bf74705d1b35bf22b4e879e09c51d23842d8a7bf27dde9ab4b3f17ac3de3cbaf",
     "native-views/react-native-native-list/docs/MIGRATION_BASELINE.md": "d0a1575b1b627aa1ed6708175dee276f884a7e82dc4cc25542d9dda9cd929057",
     "native-views/react-native-native-list/docs/ROW_TEMPLATES.md": "4b0d8dc9c27b6cbb88bcbe71ba6069ea63132da63401b2573b077a0683b18d37",
-    "native-views/react-native-native-list/docs/SPEC.md": "ba328df16c7b61c2f815025332869584196e2edc45953f51d08b4de305673efd",
+    "native-views/react-native-native-list/docs/SPEC.md": "b1c453c91c835bf8c454e6127c4e894bfd119e2cd174e9f55f6822727cba38a4",
     "native-views/react-native-native-list/docs/STYLE_SPEC.md": "c3282a383099a174bf0bea674a38d5e2eb5c2efa46c5827575a0fdac99c1c4d8",
     "native-views/react-native-native-list/ios/HybridNativeList.swift": "f1ac168485e85b379c7a193cdcfe74401ca8bb0f8626a01978eefe7686c6f654",
     "native-views/react-native-native-list/ios/NativeListAccessoryStack.swift": "cc23b8c61341c9aa2a121256b5279d330702dfb4116757bd851dde6c4a237176",
@@ -397,11 +397,12 @@
     "native-views/react-native-native-list/ios/NativeListMetricCardRenderer.swift": "0df6d3b892a6f2ec1b83940e058fe7b9e33d910c0f9790321715898b2a15d4e7",
     "native-views/react-native-native-list/ios/NativeListModels.swift": "f234f7cce455c11f55d9b03cb6006bb7c358be45822c0aed3032e44a2c30e4c6",
     "native-views/react-native-native-list/ios/NativeListRailRenderer.swift": "a3f2de013844d4a62a9cfd51344ca6ebf37d8b8fced0fb3ad504c65a089a85ab",
+    "native-views/react-native-native-list/ios/NativeListRefreshControl.swift": "c5eb6f9d9911db250021d6c5e3eb365a1f9bb64932c7ce1ead88eb48b50aad57",
     "native-views/react-native-native-list/ios/NativeListRendererCell.swift": "dcd68ac0b92ce7ebd08262a3925263ffe66db4a5708db4305c08aa3aa7cec4bd",
     "native-views/react-native-native-list/ios/NativeListRendererRegistry.swift": "8fdc10d41eae24a24a915f370df7e4f6c2496e83043c4ff24cf305c904f27db9",
     "native-views/react-native-native-list/ios/NativeListResolvedText.swift": "d286b6de2bbd92d3b5defcfdd655fb348372f2af14de6d83975422b4980a08e7",
     "native-views/react-native-native-list/ios/NativeListRowHost.swift": "9eec80fae7b444dfac1cd1b72c0d28d9c527a587431b53782268f72323a69b8c",
-    "native-views/react-native-native-list/ios/NativeListScrollGeometry.swift": "1e3a5f44e70ae3d764fef837312d9ae3f40456cff7eb6ed5972963b7833b6275",
+    "native-views/react-native-native-list/ios/NativeListScrollGeometry.swift": "d2ea017b25cd7ecf468f43eda6c9a0f396ff5ecfc2cfde112c1a95f8e509980b",
     "native-views/react-native-native-list/ios/NativeListScrollPositionTracker.swift": "e2544b2ef99eff810f52bd731ed32c70cc55ef50d6374c80d4a60f3633904df1",
     "native-views/react-native-native-list/ios/NativeListSectionHeaderRenderer.swift": "cc2704880cbd0e51c3af7a6511feacc33dbda07abbcedaecd1db655f16189b4f",
     "native-views/react-native-native-list/ios/NativeListSmartXRenderer.swift": "bdd22be313792687e66418e17e71921bd6713b397dbe7375f5ed6d0a67c249f7",
@@ -478,10 +479,11 @@
     "native-views/react-native-native-list/ios/Resources/NativeListIcons.xcassets/onekey_star.imageset/icon.svg": "c6dd79d147dd519dee495ae7c534fdd3f59eefd6c72e256b9d3c4bc33e31eab2",
     "native-views/react-native-native-list/ios/Resources/NativeListIcons.xcassets/onekey_swap_hor.imageset/Contents.json": "1e80c29a47328fa37a85cd33943914d839e11baf98d933999fdd248124099684",
     "native-views/react-native-native-list/ios/Resources/NativeListIcons.xcassets/onekey_swap_hor.imageset/icon.svg": "a1a8cf8e474ba3ffba7ef40dde78908daeeab80c69143df3e54007a7c9fa1917",
-    "native-views/react-native-native-list/ios/RNCNativeListView.swift": "05d16e0abaafafe8ff5546f613e38e299e8ed15ac4132a6a5d11cb878889f42f",
+    "native-views/react-native-native-list/ios/RNCNativeListView.swift": "70aa9b57c515f303b3cd8fefb62e14b4efb901c9a5a6b01b4cb91d2c401c6111",
     "native-views/react-native-native-list/ios/tests/NativeListActivityPresentationTests.swift": "bb20b37d0bcb133776d9554583d4eff39f3db7cea2d9e86557504bc27ecc175b",
     "native-views/react-native-native-list/ios/tests/NativeListLifecycleTests.swift": "ef767fab994c80b8e13838843640e63508de24231e48fa80caec92fcef06104e",
     "native-views/react-native-native-list/ios/tests/NativeListMediaVisibilityTests.swift": "cffd165694ba4186dc2d0f1f38665f33ea6ebb24cc201fc394fa1760204c3154",
+    "native-views/react-native-native-list/ios/tests/NativeListRefreshControlTests.swift": "fbcdac13e872a79231c48ac2c96b8d3379c999b78e9b5d2ce817ab36fe88e914",
     "native-views/react-native-native-list/ios/tests/NativeListScrollPositionTrackerTests.swift": "2a8ca1d87f3ad87224e5d582dacebe9980617144c06529caab6cdd7db0dc69b5",
     "native-views/react-native-native-list/ios/tests/NativeListSmartXPresentationTests.swift": "3f22e070a7fab57794ec9eca30a42291ccc519f2845b1ac93b2bbedec5ab874b",
     "native-views/react-native-native-list/ios/tests/NativeListSystemPresentationTests.swift": "7c96834ba7ad6dbd7baf1526e0a8891bb217c5ca1d041cf42f8a0afd238711e7",

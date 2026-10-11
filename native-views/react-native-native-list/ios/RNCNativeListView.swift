@@ -510,6 +510,7 @@ final class NativeListView: UIView {
       configureLayout(config)
       rebindRowsForLayoutDirection(config)
     }
+    if config?.refreshing == true { applyRefreshing(true) }
     performPendingScrollIfNeeded()
     layoutContainerSlots()
     emitScrollMetrics(phase: "geometry")
@@ -774,8 +775,15 @@ final class NativeListView: UIView {
     }
   }
 
+  private var canPreserveSmartXViewport: Bool {
+    nativeListCanPreserveViewport(
+      offset: collectionView.contentOffset.y, startInset: collectionView.adjustedContentInset.top,
+      refreshing: config?.refreshing == true || collectionView.refreshControl?.isRefreshing == true
+    )
+  }
+
   private func captureSmartXViewportAnchor() {
-    guard smartXViewportAnchor == nil, pendingScrollRequest == nil, !explicitScrollAnimationActive,
+    guard canPreserveSmartXViewport, smartXViewportAnchor == nil, pendingScrollRequest == nil, !explicitScrollAnimationActive,
           window != nil, !disposed, interactiveReorderSource == nil,
           let current = config, current.orientation != "horizontal", current.layout == "linear",
           collectionView.bounds.height > 0 else { return }
@@ -798,7 +806,7 @@ final class NativeListView: UIView {
     guard let anchor = smartXViewportAnchor else { return }
     // One update, one restoration. No retry or abnormal-viewport recovery loop.
     smartXViewportAnchor = nil
-    guard anchor.scrollEpoch == scrollRequestEpoch, pendingScrollRequest == nil,
+    guard canPreserveSmartXViewport, anchor.scrollEpoch == scrollRequestEpoch, pendingScrollRequest == nil,
           window != nil, !disposed, let current = config, current.orientation != "horizontal",
           let key = nativeListSurvivingAnchorKey(
             key: anchor.key, oldKeys: anchor.oldKeys, currentKeys: Set(current.items.map(\.key))
@@ -984,12 +992,14 @@ final class NativeListView: UIView {
     guard var current = config else { return }
     current.refreshing = refreshing
     config = current
-    if refreshing {
-      collectionView.refreshControl?.beginRefreshing()
-    } else {
-      collectionView.refreshControl?.endRefreshing()
-      scheduleContentShrinkCorrection()
-    }
+    applyRefreshing(refreshing, explicit: true)
+  }
+
+  private func applyRefreshing(_ refreshing: Bool, explicit: Bool = false) {
+    (collectionView.refreshControl as? NativeListRefreshControl)?.apply(
+      refreshing: refreshing, to: collectionView, explicit: explicit
+    )
+    if !refreshing { scheduleContentShrinkCorrection() }
   }
 
   private func configureLayout(_ config: NativeListConfig) {
@@ -1649,12 +1659,13 @@ final class NativeListView: UIView {
   private func configureRefresh(_ config: NativeListConfig) {
     if config.pullToRefresh {
       if collectionView.refreshControl == nil {
-        let refreshControl = UIRefreshControl()
+        let refreshControl = NativeListRefreshControl()
         refreshControl.addTarget(self, action: #selector(refreshTriggered), for: .valueChanged)
         collectionView.refreshControl = refreshControl
       }
-      if config.refreshing { collectionView.refreshControl?.beginRefreshing() }
-      else { collectionView.refreshControl?.endRefreshing() }
+      collectionView.refreshControl?.tintColor = config.theme?["accent"] != nil
+        ? nativeListColor(config.theme, "accent", "#108303") : nil
+      applyRefreshing(config.refreshing)
     } else {
       collectionView.refreshControl = nil
     }
