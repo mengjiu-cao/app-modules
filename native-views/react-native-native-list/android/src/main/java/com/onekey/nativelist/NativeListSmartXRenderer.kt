@@ -219,6 +219,7 @@ internal class NativeListSmartXRowView(context: ThemedReactContext) :
     color: Int = tone("text"),
     weight: String = "medium",
     lines: Int = 1,
+    themedString: Boolean = true,
   ): TextView {
     val view = node(key) { NativeListTextView(reactContext) }
     view.setPadding(0, 0, 0, 0)
@@ -235,7 +236,7 @@ internal class NativeListSmartXRowView(context: ThemedReactContext) :
     view.letterSpacing = 0f
     view.fontFeatureSettings = null
     view.textLocale = java.util.Locale.forLanguageTag(payload.getString("locale"))
-    view.text = withLineHeight(value, (px(line) * scale).roundToInt())
+    view.text = withLineHeight(value, (px(smartXLineHeight(line, value, themedString)) * scale).roundToInt())
     view.minimumHeight = 0
     view.minimumWidth = 0
     view.background = null
@@ -335,7 +336,7 @@ internal class NativeListSmartXRowView(context: ThemedReactContext) :
     orders[root] = 0
     root.background = drawable(tone("tokenBackground"), size / 2, tone("tokenBorder"))
     root.clipToOutline = true
-    val fallback = text("$key.fallback", data.optString("fallbackText"), 12, 18, tone("tokenText"), "regular")
+    val fallback = text("$key.fallback", data.optString("fallbackText"), 12, 18, tone("tokenText"), "regular", themedString = false)
     fallback.gravity = Gravity.CENTER
     androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(fallback, max(1, (px(12) * scale * .1f).roundToInt()), max(1, (px(12) * scale).roundToInt()), 1, TypedValue.COMPLEX_UNIT_PX)
     add(root, fallback, FrameLayout.LayoutParams((px(size) * .8f).roundToInt(), -1, Gravity.CENTER))
@@ -405,7 +406,7 @@ internal class NativeListSmartXRowView(context: ThemedReactContext) :
     }
     put(column, header)
     if (rowType == "smartxOpinion" && author.optString("handle").isNotEmpty()) {
-      val handle = text("author.handle", author.getString("handle"), 12, 18, tone("secondaryText"))
+      val handle = text("author.handle", author.getString("handle"), 12, 18, tone("secondaryText"), themedString = false)
       testID(handle, author.optString("handleTestID"))
       put(column, handle, top = 2)
     }
@@ -451,7 +452,7 @@ internal class NativeListSmartXRowView(context: ThemedReactContext) :
         put(pile, frame, px(20), px(20), start = if (index == 0) 0 else -6)
       }
       if (followed.optString("extraCount").isNotEmpty()) {
-        val extra = text("followed.extra", followed.getString("extraCount"), 12, 18, tone("secondaryText"))
+        val extra = text("followed.extra", followed.getString("extraCount"), 12, 18, tone("secondaryText"), themedString = false)
         extra.setPadding(px(4), 0, px(4), 0)
         extra.minimumWidth = px(20)
         extra.gravity = Gravity.CENTER
@@ -465,7 +466,7 @@ internal class NativeListSmartXRowView(context: ThemedReactContext) :
         content.append(run.getString("text"))
         content.setSpan(ForegroundColorSpan(parseNativeListColor(run.getString("color"))), start, content.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
       }
-      put(row, text("followed.text", content, 12, 18, tone("secondaryText")), 0, weight = 1f)
+      put(row, text("followed.text", content, 12, 18, tone("secondaryText"), themedString = false), 0, weight = 1f)
       put(column, row, top = 8)
     }
   }
@@ -529,7 +530,7 @@ internal class NativeListSmartXRowView(context: ThemedReactContext) :
     append(" at", tone("secondaryText"))
     append(" ${payload.getString("marketCap")}", tone("text"))
     append(" MC", tone("secondaryText"))
-    put(row, text("trade.text", value), 0, weight = 1f)
+    put(row, text("trade.text", value, themedString = false), 0, weight = 1f)
     put(column, row, height = px(40), top = 8)
   }
 
@@ -543,7 +544,7 @@ internal class NativeListSmartXRowView(context: ThemedReactContext) :
         value.setSpan(ForegroundColorSpan(tone("secondaryText")), 0, value.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
       }
       value.append(values.getString(index))
-      put(thresholds, text("threshold.$index", value, lines = 0), top = if (index == 0) 0 else 2)
+      put(thresholds, text("threshold.$index", value, lines = 0, themedString = false), top = if (index == 0) 0 else 2)
     }
     put(column, thresholds, top = 8)
     payload.optJSONObject("position")?.let { data ->
@@ -565,7 +566,7 @@ internal class NativeListSmartXRowView(context: ThemedReactContext) :
       val rows = group("milestone.values")
       data.getJSONArray("values").objects().forEachIndexed { index, value ->
         val row = group("milestone.value.$index", true)
-        val label = text("milestone.value.label.$index", value.getString("label"), 12, 18, tone("secondaryText"), lines = 0)
+        val label = text("milestone.value.label.$index", value.getString("label"), 12, 18, tone("secondaryText"), lines = 0, themedString = false)
         put(row, label, 0, end = 12, weight = 1f)
         put(row, text("milestone.value.text.$index", value.getString("text"), color = parseNativeListColor(value.getString("color"))), -2)
         put(rows, row, top = if (index == 0) 0 else 4)
@@ -634,7 +635,7 @@ internal class NativeListSmartXRowView(context: ThemedReactContext) :
       put(title, text("announcement.title", payload.getString("title")), 0, weight = 1f)
       put(card, title)
     }
-    val body = text("announcement.body", "", weight = "regular", lines = if (payload.getBoolean("expanded")) 0 else 2)
+    val body = text("announcement.body", "", weight = "regular", lines = if (payload.getBoolean("expanded")) 0 else 2, themedString = false)
     val contentSpans = SpannableStringBuilder()
     val epoch = activeEpoch
     payload.getJSONArray("spans").objects().forEach { span ->

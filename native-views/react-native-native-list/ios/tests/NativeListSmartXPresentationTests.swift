@@ -170,6 +170,66 @@ final class NativeListSmartXPresentationTests: XCTestCase {
     XCTAssertEqual(layout.texts["followedExtraText"]?.value.string, "+12")
   }
 
+  func testCJKStringChildrenUseAppLineHeightWithoutChangingFontSize() throws {
+    var content = payload()
+    content["author"] = ["name": "作者", "time": "刚刚", "handle": "中文"]
+    content["body"] = "中文正文"; content["bodyAction"] = action("body"); content["bodyTestID"] = "body-text"
+    content["tag"] = ["text": "观点", "color": "#FFFFFF", "backgroundColor": "#333333", "testID": "tag"]
+    content["position"] = ["testID": "position", "token": ["symbol": "代币", "fallbackText": "代币"], "cycleLabel": "持仓中", "cycleOpen": true,
+      "primary": ["text": "估值", "color": "#FFFFFF"], "secondary": ["text": "收益", "color": "#FFFFFF"]]
+    content["like"] = ["count": "1", "liked": false, "action": action("like")]
+    content["links"] = [["label": "查看原文", "action": action("link")]]
+    let layout = NativeListSmartXRenderer.Layout(item: try item("smartxOpinion", content: content), width: 390)
+    for (id, expected) in [("author", 22), ("time", 20), ("body", 22), ("tagText", 20), ("cycle", 20), ("symbol", 22), ("primary", 22), ("secondary", 20), ("link0Text", 20)] {
+      let text = try XCTUnwrap(layout.texts[id], id)
+      XCTAssertEqual(layout.lineHeight(text.value), CGFloat(expected), id)
+      XCTAssertGreaterThanOrEqual(text.frame.height, CGFloat(expected), id)
+    }
+    let bodyFont = try XCTUnwrap(layout.texts["body"]?.value.attribute(.font, at: 0, effectiveRange: nil) as? UIFont)
+    XCTAssertEqual(bodyFont.pointSize, 14)
+    XCTAssertEqual(layout.lineHeight(try XCTUnwrap(layout.texts["handle"]).value), 18, "@ plus handle is an array child")
+    XCTAssertEqual(try XCTUnwrap(layout.texts["symbol"]).frame.minY, try XCTUnwrap(layout.texts["cycle"]).frame.maxY + 2)
+    XCTAssertEqual(try XCTUnwrap(layout.texts["secondary"]).frame.minY, try XCTUnwrap(layout.texts["primary"]).frame.maxY)
+    XCTAssertEqual(layout.lineHeight(layout.value("English")), 20)
+    XCTAssertEqual(layout.lineHeight(layout.value("。")), 22)
+    XCTAssertEqual(layout.lineHeight(layout.value("Ａ")), 22)
+    XCTAssertEqual(layout.lineHeight(layout.value("가")), 20, "Match the App regex exactly, not a broader script classifier")
+  }
+
+  func testCJKRichAndArrayChildrenKeepTheirDeclaredLineHeights() throws {
+    var content = payload()
+    content["author"] = ["name": "公告作者", "time": "刚刚"]
+    content["pinnedLabel"] = "置顶"; content["title"] = "公告标题"
+    content["spans"] = [["kind": "text", "text": "中文富文本", "bold": false, "italic": false]]
+    content["expanded"] = false; content["toggleLabel"] = "展开"; content["toggleAction"] = action("toggle")
+    content["like"] = ["count": "1", "liked": false, "action": action("like")]
+    let announcement = NativeListSmartXRenderer.Layout(item: try item("smartxAnnouncement", content: content), width: 390)
+    for (id, expected) in [("author", 26), ("time", 20), ("pinnedLabel", 20), ("title", 22), ("toggle", 20), ("announcementBody", 20)] {
+      XCTAssertEqual(announcement.lineHeight(try XCTUnwrap(announcement.texts[id], id).value), CGFloat(expected), id)
+    }
+    var trade = payload()
+    trade["token"] = ["symbol": "代币", "fallbackText": "代币"]; trade["amount"] = "1"; trade["marketCap"] = "未知"
+    let tradeLayout = NativeListSmartXRenderer.Layout(item: try item("smartxTrade", content: trade), width: 390)
+    let tradeText = try XCTUnwrap(tradeLayout.texts["tradeText"]).value
+    tradeText.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: tradeText.length)) { paragraph, _, _ in
+      XCTAssertEqual((paragraph as? NSParagraphStyle)?.maximumLineHeight, 20)
+    }
+    var opinion = payload()
+    opinion["body"] = "中文"; opinion["bodyAction"] = action("body"); opinion["bodyTestID"] = "body-text"
+    opinion["like"] = ["count": "1", "liked": false, "action": action("like")]; opinion["links"] = []
+    opinion["followedLikes"] = ["avatars": [], "text": [["text": "张三也点赞了", "color": "#FFFFFF"]], "action": action("followed")]
+    let opinionLayout = NativeListSmartXRenderer.Layout(item: try item("smartxOpinion", content: opinion), width: 390)
+    XCTAssertEqual(opinionLayout.lineHeight(try XCTUnwrap(opinionLayout.texts["followedText"]).value), 18)
+    var milestone = payload()
+    milestone["thresholds"] = ["曾达到一千美元"]
+    milestone["position"] = ["token": ["symbol": "代币", "fallbackText": "代币"], "mockText": "模拟", "staleText": "估值于刚刚",
+      "values": [["label": "仓位估值", "text": "暂不可用", "color": "#FFFFFF"]]]
+    let milestoneLayout = NativeListSmartXRenderer.Layout(item: try item("smartxMilestone", content: milestone), width: 390)
+    for (id, expected) in [("threshold0", 20), ("valueLabel0", 18), ("value0", 22), ("symbol", 22), ("mockText", 20), ("stale", 20)] {
+      XCTAssertEqual(milestoneLayout.lineHeight(try XCTUnwrap(milestoneLayout.texts[id], id).value), CGFloat(expected), id)
+    }
+  }
+
   func testSmartXRowsDoNotUseGenericRowPress() throws {
     for type in ["smartxOpinion", "smartxTrade", "smartxMilestone", "smartxAnnouncement"] {
       XCTAssertFalse(try item(type, content: payload()).isRowPressEnabled)

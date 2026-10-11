@@ -52,7 +52,7 @@ App 的四个直接依赖必须全部使用同一个完整产物 SHA：
 
 ## 临时 Workspace
 
-App 仓库提供 `scripts/native-list-workspace.mjs`。它创建专用 detached App worktree 和四个准备好的消费包，Fork 的 Yarn 源码工作区保持独立。正式 manifest 不写本地路径，临时根拥有独立 lockfile/node_modules，并继承 App 的 overrides、patchedDependencies、onlyBuiltDependencies、ignoredBuiltDependencies 及其他 pnpm 配置。补丁路径重定位到 `app/patches`，仅 App 的四个包用 parent-specific overrides 替换成 `workspace:*`。临时根也声明这四包与同版本 React、RN、Nitro，统一 peer 来源。
+App 仓库提供 `scripts/native-list-workspace.mjs`。它创建专用 detached App worktree 和四个准备好的消费包，Fork 的 Yarn 源码工作区保持独立。正式 manifest 不写本地路径，临时根拥有独立 lockfile/node_modules，并继承 App 的 overrides、patchedDependencies、onlyBuiltDependencies、ignoredBuiltDependencies 及其他 pnpm 配置。补丁路径重定位到 `app/patches`，仅 App 的四个包用 parent-specific overrides 替换成 `workspace:*`。临时根也声明这四包与同版本 React、RN、Nitro，统一 peer 来源。临时锁文件从正式 App 锁文件生成，保留全部 packages、snapshots、补丁摘要和具体版本；仅重定位 importer、补丁路径和四包本地链接。安装使用 --frozen-lockfile，四包内部 peer 链接同组 Workspace 包，并检查 App 全部直接依赖版本一致。
 
 ```sh
 node /absolute/smartx-backup/scripts/native-list-workspace.mjs create --root /absolute/native-list-workspace --dist /absolute/native-list-dist
