@@ -901,6 +901,7 @@ class NativeListView(
   }
 
   fun applySnapshot(snapshotJson: String) {
+    if (disposed) return
     val next = try {
       NativeListConfig.parse(snapshotJson)
     } catch (_: Exception) {
@@ -1224,6 +1225,7 @@ class NativeListView(
   }
 
   fun applyPatches(patchesJson: String) {
+    if (disposed) return
     val current = config ?: return
     val patches = try {
       JSONArray(patchesJson)
@@ -1628,12 +1630,18 @@ class NativeListView(
 
   fun dispose() {
     if (disposed) return
+    disposed = true
     finishScrollMetricsInteraction()
     onScrollMetrics = null
     cancelSmartXAnchor()
-    disposed = true
     containerSlotRelayoutPending = false
     onScrollPositionThresholdChange = null
+    onRowAction = null
+    onActionAnchorInvalidated = null
+    onSelectionDelta = null
+    onReorder = null
+    onEndReached = null
+    onVisibleRangeChanged = null
     if (!isAttachedToWindow) disposeResources()
   }
 
@@ -1666,6 +1674,10 @@ class NativeListView(
     stickyHeaderHost.visibility = GONE
     recyclerView.swapAdapter(null, false)
     adapter.dispose()
+    config = null
+    stickyHeaderConfig = null
+    pendingReorder = null
+    sectionIndexEntries = emptyList()
   }
 
   private fun updateLayout(next: NativeListConfig) {
