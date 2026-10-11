@@ -70,3 +70,9 @@ struct NativeListScrollMetricsDelivery {
     return true
   }
 }
+
+/// UIKit owns negative pull/return displacement. A clamped data anchor would
+/// otherwise cut off its refresh animation even when the visible key survives.
+func nativeListCanPreserveViewport(offset: CGFloat, startInset: CGFloat, refreshing: Bool) -> Bool {
+  !refreshing && offset + startInset >= 0
+}

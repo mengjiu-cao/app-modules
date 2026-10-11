@@ -550,6 +550,24 @@ The container does not emit a second haptic for the release fallback. The fallba
 inactive unless pull-to-refresh is enabled; no product-specific threshold is
 hardcoded into the module.
 
+## iOS refresh presentation and viewport ownership (2026-10-11)
+
+Implemented contract; runtime verification is recorded by the consuming App task.
+The list keeps UIKit UIRefreshControl for pull/release/return animation. Its tint
+uses snapshot.theme.accent when provided, matching the consumer RefreshControl.
+A programmatic false-to-true transition reveals the same control as RN Fabric
+RefreshControl; a native gesture already refreshing must not move the offset a
+second time. Unchanged false snapshots must not cancel a native pull while its
+JS controlled-state echo is pending. Explicit setRefreshing(false) still ends a
+rejected/finished gesture. A true state received before attachment is applied
+when the control is laid out in a window.
+
+SmartX data-update anchors must not capture or restore while refreshing or while
+the normalized top offset is negative. UIKit owns this temporary pull/return
+displacement; clamping a captured negative anchor would snap the rows to the top.
+Normal append/height-change anchors and explicit caller scroll authority remain.
+Requests, completion, errors, and deduplication remain caller-owned.
+
 ## Android refresh foreground geometry
 
 Status: implemented; NFT/History Home placement verified on Android on 2026-09-28.

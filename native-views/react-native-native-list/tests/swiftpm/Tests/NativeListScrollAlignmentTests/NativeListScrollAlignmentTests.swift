@@ -3,6 +3,16 @@ import XCTest
 @testable import NativeListScrollAlignment
 
 final class NativeListScrollAlignmentTests: XCTestCase {
+  func testDataAnchorsYieldToRefreshAndNegativeReturnOffsets() {
+    XCTAssertFalse(nativeListCanPreserveViewport(offset: -60, startInset: 0, refreshing: true))
+    XCTAssertFalse(nativeListCanPreserveViewport(offset: -60, startInset: 60, refreshing: true))
+    XCTAssertFalse(nativeListCanPreserveViewport(offset: -20, startInset: 0, refreshing: false))
+    XCTAssertFalse(nativeListCanPreserveViewport(offset: -120, startInset: 108, refreshing: false))
+    XCTAssertTrue(nativeListCanPreserveViewport(offset: -108, startInset: 108, refreshing: false))
+    XCTAssertTrue(nativeListCanPreserveViewport(offset: 0, startInset: 0, refreshing: false))
+    XCTAssertTrue(nativeListCanPreserveViewport(offset: 450, startInset: 0, refreshing: false))
+  }
+
   private func offset(
     start: CGFloat = 2328,
     inset: CGFloat = 8,
