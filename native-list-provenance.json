@@ -3,13 +3,13 @@
   "source": {
     "repository": "https://github.com/mengjiu-cao/app-modules",
     "branch": "arlan/smartx-native-list",
-    "commit": "874c77d87ba98468d740ee0f6bf497f6b2f23368",
+    "commit": "1579c8119bc235ec019d66ad75210c6f55a34d4b",
     "upstreamBaseline": "f11ac08bf1278a31345829d9e245015d52035df4",
     "selectedUpstreamCommits": [
       "5e94f3bd057ca054ae14153e1fa893d3ae1d0eb5"
     ],
     "dirty": false,
-    "inputDigest": "e2f88192a5e5bd0ba85b4b98e66e6cd98e2c7bb9e8c9941b7d516880c41d96f0"
+    "inputDigest": "f4101bc03366ba0ad9fcc03b7690e203f00b09fb6a9aaf7a1281c0a54eab2d84"
   },
   "generators": {
     "node": "v24.21.0",
@@ -338,7 +338,7 @@
     "native-views/react-native-native-list/android/src/main/java/com/onekey/nativelist/NativeListSectionHeaderRenderer.kt": "86a86f4eb7f13b7498b2e3276ab8f3c0cab8dddfacb90ac440e47ced1c1d4030",
     "native-views/react-native-native-list/android/src/main/java/com/onekey/nativelist/NativeListSmartXGeometry.kt": "1c2e2d0407429de36247123664b5fc59dd30373b5a29b6daef0a277642c8210b",
     "native-views/react-native-native-list/android/src/main/java/com/onekey/nativelist/NativeListSmartXImageState.kt": "589a7698f8bb00c0cfa7a521aa6bcc09a6f04b47c8842a6c95051ee7882003f7",
-    "native-views/react-native-native-list/android/src/main/java/com/onekey/nativelist/NativeListSmartXRenderer.kt": "0719b7f757bdca1c49cbd6a7840a7242deeee471370af5a4770bb06262098ee7",
+    "native-views/react-native-native-list/android/src/main/java/com/onekey/nativelist/NativeListSmartXRenderer.kt": "636c52c1ccd904df2129b0d47c0dd97bc446e6e7a2fbd02ac538436446190f96",
     "native-views/react-native-native-list/android/src/main/java/com/onekey/nativelist/NativeListSmartXScrollState.kt": "9296d869223ffcd78858feee672f9e3e8f0960a14295355aa843ccf2bebaf7f6",
     "native-views/react-native-native-list/android/src/main/java/com/onekey/nativelist/NativeListSmartXTypography.kt": "b2362663b3761879fd9700ab16bd8a88fb846d038b3fe698f26c3bd20b55bbc1",
     "native-views/react-native-native-list/android/src/main/java/com/onekey/nativelist/NativeListSystemRenderer.kt": "c0a9f013e3425423b589c7e46946f61aa9821a3126506cb2f8c6c2bbcad89738",
@@ -373,7 +373,7 @@
     "native-views/react-native-native-list/docs/images/row-wallet-group.svg": "bf74705d1b35bf22b4e879e09c51d23842d8a7bf27dde9ab4b3f17ac3de3cbaf",
     "native-views/react-native-native-list/docs/MIGRATION_BASELINE.md": "d0a1575b1b627aa1ed6708175dee276f884a7e82dc4cc25542d9dda9cd929057",
     "native-views/react-native-native-list/docs/ROW_TEMPLATES.md": "4b0d8dc9c27b6cbb88bcbe71ba6069ea63132da63401b2573b077a0683b18d37",
-    "native-views/react-native-native-list/docs/SPEC.md": "7cad0f5bf8714a7a8a269964d10a3d0c228eda6ea374cd3cb97d40bd757bc36a",
+    "native-views/react-native-native-list/docs/SPEC.md": "9c81146a7a64a270ab9ac881c25e964160c5a999ea6ca23147a90a41c9bf2db7",
     "native-views/react-native-native-list/docs/STYLE_SPEC.md": "c3282a383099a174bf0bea674a38d5e2eb5c2efa46c5827575a0fdac99c1c4d8",
     "native-views/react-native-native-list/ios/HybridNativeList.swift": "f1ac168485e85b379c7a193cdcfe74401ca8bb0f8626a01978eefe7686c6f654",
     "native-views/react-native-native-list/ios/NativeListAccessoryStack.swift": "cc23b8c61341c9aa2a121256b5279d330702dfb4116757bd851dde6c4a237176",

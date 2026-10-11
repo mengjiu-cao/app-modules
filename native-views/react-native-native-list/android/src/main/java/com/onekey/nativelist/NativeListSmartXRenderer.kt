@@ -268,7 +268,6 @@ internal class NativeListSmartXRowView(context: ThemedReactContext) :
     val key = data?.optString("key").orEmpty()
     view.isEnabled = !disabled
     view.isSelected = selected
-    view.isClickable = key.isNotEmpty() && !disabled
     view.isFocusable = key.isNotEmpty()
     view.contentDescription = data?.optString("label")?.takeIf(String::isNotEmpty)
     view.importantForAccessibility = if (key.isEmpty()) View.IMPORTANT_FOR_ACCESSIBILITY_AUTO else View.IMPORTANT_FOR_ACCESSIBILITY_YES
@@ -297,6 +296,9 @@ internal class NativeListSmartXRowView(context: ThemedReactContext) :
     view.setOnClickListener(if (key.isEmpty() || disabled) null else View.OnClickListener {
       if (bindingEpoch == token && isAttachedToWindow) emitAction(key, view, "smartx")
     })
+    // Android's setOnClickListener(null) still sets CLICKABLE. Reset it after
+    // clearing the listener so static text/icons do not consume a parent's tap.
+    view.isClickable = key.isNotEmpty() && !disabled
     view.setOnTouchListener(if (key.isEmpty() || disabled) null else View.OnTouchListener { target, event ->
       target.alpha = when (event.actionMasked) {
         MotionEvent.ACTION_DOWN -> palette.optDouble("pressedOpacity", 0.6).toFloat()
@@ -906,6 +908,8 @@ private class SmartXImage(context: ThemedReactContext) : FrameLayout(context) {
     fallbackSlot?.recycle()
     setOnClickListener(null)
     setOnTouchListener(null)
+    isClickable = false
+    isFocusable = false
     animate().cancel()
   }
   fun dispose() { recycle(); slot.dispose(); fallbackSlot?.dispose() }
