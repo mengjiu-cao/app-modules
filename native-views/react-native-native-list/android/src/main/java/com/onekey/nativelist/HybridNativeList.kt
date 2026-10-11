@@ -31,6 +31,12 @@ class HybridNativeList(context: ThemedReactContext) : HybridNativeListSpec() {
       dispatchToUi { hostView.setContainerSlotHeightsJson(value) }
     }
 
+  override var onScrollMetrics: ((payloadJson: String) -> Unit)? = null
+    set(value) {
+      field = value
+      dispatchToUi { hostView.onScrollMetrics = value }
+    }
+
   override var snapshotJson: String = ""
     get() = field
     set(value) {

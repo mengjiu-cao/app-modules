@@ -107,6 +107,86 @@ final class NativeListView: UIView {
     case end(Bool)
   }
 
+  private struct SmartXViewportAnchor {
+    let key: String
+    let oldKeys: [String]
+    let pixelOffset: CGFloat
+    let scrollEpoch: UInt
+  }
+
+  private var smartXViewportAnchor: SmartXViewportAnchor?
+  private var scrollRequestEpoch: UInt = 0
+  private var dataUpdateEpoch: UInt = 0
+  private var explicitScrollAnimationActive = false
+  private var scrollMetricsDelivery = NativeListScrollMetricsDelivery()
+  private var metricsDragging = false
+  private var metricsMomentum = false
+  var onScrollMetrics: ((String) -> Void)? {
+    didSet {
+      scrollMetricsDelivery.reset()
+      metricsDragging = false
+      metricsMomentum = false
+      guard onScrollMetrics != nil, !disposed, window != nil else { return }
+      emitScrollMetrics(phase: "geometry", force: true)
+      if collectionView.isDragging { beginMetricsDrag() }
+      if collectionView.isDecelerating { beginMetricsMomentum() }
+    }
+  }
+
+  private func emitScrollMetrics(phase: String, force: Bool = false) {
+    // Do not construct or serialize a bridge payload when no consumer listens.
+    guard let callback = onScrollMetrics, !disposed, window != nil else { return }
+    let geometry = [
+      Double(collectionView.contentOffset.x), Double(collectionView.contentOffset.y),
+      Double(collectionView.contentSize.width), Double(collectionView.contentSize.height),
+      Double(collectionView.bounds.width), Double(collectionView.bounds.height),
+    ]
+    guard scrollMetricsDelivery.shouldEmit(
+      phase: phase, time: ProcessInfo.processInfo.systemUptime, geometry: geometry, force: force
+    ) else { return }
+    emit(callback, [
+      "phase": phase,
+      "offsetX": geometry[0], "offsetY": geometry[1],
+      "contentWidth": geometry[2], "contentHeight": geometry[3],
+      "viewportWidth": geometry[4], "viewportHeight": geometry[5],
+    ])
+  }
+
+  private func beginMetricsDrag() {
+    guard onScrollMetrics != nil, !disposed, window != nil else { return }
+    endMetricsMomentum()
+    guard !metricsDragging else { return }
+    metricsDragging = true
+    emitScrollMetrics(phase: "beginDrag")
+  }
+
+  private func endMetricsDrag() {
+    guard metricsDragging else { return }
+    metricsDragging = false
+    emitScrollMetrics(phase: "endDrag")
+  }
+
+  private func beginMetricsMomentum() {
+    guard onScrollMetrics != nil, !disposed, window != nil else { return }
+    endMetricsDrag()
+    guard !metricsMomentum else { return }
+    metricsMomentum = true
+    emitScrollMetrics(phase: "beginMomentum")
+  }
+
+  private func endMetricsMomentum() {
+    guard metricsMomentum else { return }
+    metricsMomentum = false
+    emitScrollMetrics(phase: "endMomentum")
+  }
+
+  private func finishScrollMetrics() {
+    endMetricsDrag()
+    endMetricsMomentum()
+    emitScrollMetrics(phase: "geometry", force: true)
+    scrollMetricsDelivery.reset()
+  }
+
   private var scrollPositionTracker = NativeListScrollPositionTracker()
   var onScrollPositionThresholdChange: ((Bool) -> Void)? {
     didSet {
@@ -397,13 +477,24 @@ final class NativeListView: UIView {
   }
 
   override func willMove(toWindow newWindow: UIWindow?) {
-    if newWindow == nil { attachSectionIndexToList() }
+    if newWindow == nil {
+      finishScrollMetrics()
+      smartXViewportAnchor = nil
+      explicitScrollAnimationActive = false
+      dataUpdateEpoch &+= 1
+      attachSectionIndexToList()
+    }
     super.willMove(toWindow: newWindow)
   }
 
   override func didMoveToWindow() {
     super.didMoveToWindow()
     updateSectionIndexAttachment()
+    if window != nil {
+      emitScrollMetrics(phase: "geometry", force: true)
+      if collectionView.isDragging { beginMetricsDrag() }
+      if collectionView.isDecelerating { beginMetricsMomentum() }
+    }
   }
 
   override func layoutSubviews() {
@@ -421,6 +512,7 @@ final class NativeListView: UIView {
     }
     performPendingScrollIfNeeded()
     layoutContainerSlots()
+    emitScrollMetrics(phase: "geometry")
   }
 
   // A layout-direction change may arrive without a layout pass (semantic attribute or trait).
@@ -451,7 +543,7 @@ final class NativeListView: UIView {
   }
 
   func applySnapshotJson(_ json: String) {
-    guard let next = try? NativeListConfig.parse(json: json) else { return }
+    guard !disposed, let next = try? NativeListConfig.parse(json: json) else { return }
     invalidateActionAnchor(reason: "snapshot")
     if let current = config, isControlledSelectionSnapshotUpdate(from: current, to: next) {
       config = next
@@ -473,6 +565,11 @@ final class NativeListView: UIView {
     // rows whose own content is unchanged.
     let themeChanged = !dictionariesEqual(config?.theme, next.theme)
       || !dictionariesEqual(config?.listStyle, next.listStyle)
+    if let current = config, shouldPreserveSmartXViewport(from: current, to: next, themeChanged: themeChanged) {
+      captureSmartXViewportAnchor()
+    }
+    dataUpdateEpoch &+= 1
+    let updateEpoch = dataUpdateEpoch
     if config?.generation != next.generation { endReachedGeneration = nil }
     config = next
     itemsByKey = Dictionary(uniqueKeysWithValues: next.items.map { ($0.key, $0) })
@@ -499,9 +596,11 @@ final class NativeListView: UIView {
     snapshot.reloadItems(Array(replacedKeys))
     snapshot.reconfigureItems(Array(changedRetainedKeys.subtracting(replacedKeys)))
     dataSource.apply(snapshot, animatingDifferences: false) { [weak self] in
-      guard let self else { return }
+      guard let self, !self.disposed else { return }
       self.collectionView.layoutIfNeeded()
+      if self.dataUpdateEpoch == updateEpoch { self.restoreSmartXViewportAnchor() }
       self.performPendingScrollIfNeeded()
+      self.emitScrollMetrics(phase: "geometry")
       self.emitVisibleRangeIfNeeded()
       self.checkEndReached()
       self.syncSectionIndexToVisibleRows()
@@ -509,7 +608,7 @@ final class NativeListView: UIView {
   }
 
   func applyPatchesJson(_ json: String) {
-    guard var current = config,
+    guard !disposed, var current = config,
           let bytes = json.data(using: .utf8),
           let patches = try? JSONSerialization.jsonObject(with: bytes) as? [[String: Any]] else { return }
     let indexByKey = Dictionary(uniqueKeysWithValues: current.items.enumerated().map { ($1.key, $0) })
@@ -527,6 +626,7 @@ final class NativeListView: UIView {
     var changedKeys = Set<String>()
     var marketQuoteKeys = Set<String>()
     var sizeChanged = false
+    var smartXSizeChanged = false
     var reorderStructureChanged = false
     let marketQuoteFields: Set<String> = [
       "revision", "price", "priceSegments", "change", "accessibilityLabel",
@@ -543,6 +643,7 @@ final class NativeListView: UIView {
         current.sectionIndexEnabled && previous.type == "sectionHeader" &&
         previous.data.string("indexTitle").isEmpty != item.data.string("indexTitle").isEmpty {
         sizeChanged = true
+        if isSmartXItem(previous) { smartXSizeChanged = true }
       }
       if previous.sectionKey != item.sectionKey ||
         previous.isReorderable != item.isReorderable ||
@@ -565,6 +666,7 @@ final class NativeListView: UIView {
     if interactiveReorderSource != nil, sizeChanged || reorderStructureChanged {
       cancelInteractiveReorderForStructuralUpdate()
     }
+    if smartXSizeChanged { captureSmartXViewportAnchor() }
     config = current
     itemsByKey = Dictionary(uniqueKeysWithValues: current.items.map { ($0.key, $0) })
     for indexPath in collectionView.indexPathsForVisibleItems {
@@ -588,10 +690,15 @@ final class NativeListView: UIView {
     deferredReorderReconfigureKeys.removeAll()
     var snapshot = dataSource.snapshot()
     snapshot.reconfigureItems(changedKeys.filter { snapshot.indexOfItem($0) != nil })
+    dataUpdateEpoch &+= 1
+    let updateEpoch = dataUpdateEpoch
     dataSource.apply(snapshot, animatingDifferences: false) { [weak self] in
-      guard let self else { return }
+      guard let self, !self.disposed else { return }
       if sizeChanged { self.flowLayout.invalidateLayout() }
       self.collectionView.layoutIfNeeded()
+      if self.dataUpdateEpoch == updateEpoch { self.restoreSmartXViewportAnchor() }
+      self.performPendingScrollIfNeeded()
+      self.emitScrollMetrics(phase: "geometry")
       self.emitVisibleRangeIfNeeded()
       self.checkEndReached()
     }
@@ -638,7 +745,75 @@ final class NativeListView: UIView {
     requestScroll(.end(animated))
   }
 
+  private func isSmartXItem(_ item: NativeListItem) -> Bool {
+    ["smartxOpinion", "smartxTrade", "smartxMilestone", "smartxAnnouncement"].contains(item.type)
+  }
+
+  private func shouldPreserveSmartXViewport(
+    from current: NativeListConfig,
+    to next: NativeListConfig,
+    themeChanged: Bool
+  ) -> Bool {
+    guard current.orientation != "horizontal", next.orientation != "horizontal",
+          current.layout == "linear", next.layout == "linear",
+          current.items.contains(where: isSmartXItem) || next.items.contains(where: isSmartXItem) else { return false }
+    if current.items.map(\.key) != next.items.map(\.key) { return true }
+    if themeChanged || current.contentPaddingTop != next.contentPaddingTop ||
+      current.contentPaddingHorizontal != next.contentPaddingHorizontal || current.itemSpacing != next.itemSpacing {
+      return true
+    }
+    return zip(current.items, next.items).contains { old, new in
+      guard isSmartXItem(old) || isSmartXItem(new) else { return false }
+      if old.content == new.content { return false }
+      var oldData = old.data
+      var newData = new.data
+      // A business/render generation echo alone cannot reposition the viewport.
+      oldData.removeValue(forKey: "revision")
+      newData.removeValue(forKey: "revision")
+      return !dictionariesEqual(oldData, newData)
+    }
+  }
+
+  private func captureSmartXViewportAnchor() {
+    guard smartXViewportAnchor == nil, pendingScrollRequest == nil, !explicitScrollAnimationActive,
+          window != nil, !disposed, interactiveReorderSource == nil,
+          let current = config, current.orientation != "horizontal", current.layout == "linear",
+          collectionView.bounds.height > 0 else { return }
+    collectionView.layoutIfNeeded()
+    let visibleStart = collectionView.contentOffset.y + collectionView.adjustedContentInset.top
+    let first = collectionView.indexPathsForVisibleItems.sorted { $0.item < $1.item }.first { indexPath in
+      guard let attributes = collectionView.layoutAttributesForItem(at: indexPath) else { return false }
+      return attributes.frame.maxY > visibleStart
+    }
+    guard let first, let item = current.items[safe: first.item],
+          let attributes = collectionView.layoutAttributesForItem(at: first) else { return }
+    smartXViewportAnchor = SmartXViewportAnchor(
+      key: item.key, oldKeys: current.items.map(\.key),
+      pixelOffset: attributes.frame.minY - collectionView.contentOffset.y,
+      scrollEpoch: scrollRequestEpoch
+    )
+  }
+
+  private func restoreSmartXViewportAnchor() {
+    guard let anchor = smartXViewportAnchor else { return }
+    // One update, one restoration. No retry or abnormal-viewport recovery loop.
+    smartXViewportAnchor = nil
+    guard anchor.scrollEpoch == scrollRequestEpoch, pendingScrollRequest == nil,
+          window != nil, !disposed, let current = config, current.orientation != "horizontal",
+          let key = nativeListSurvivingAnchorKey(
+            key: anchor.key, oldKeys: anchor.oldKeys, currentKeys: Set(current.items.map(\.key))
+          ), let indexPath = dataSource.indexPath(for: key),
+          let attributes = collectionView.layoutAttributesForItem(at: indexPath) else { return }
+    setScrollOffset(attributes.frame.minY - anchor.pixelOffset, animated: false)
+    emitScrollMetrics(phase: "geometry", force: true)
+  }
+
   private func requestScroll(_ request: ScrollRequest) {
+    // Imperative consumer requests always supersede a captured data-update anchor.
+    scrollRequestEpoch &+= 1
+    smartXViewportAnchor = nil
+    explicitScrollAnimationActive = false
+    endMetricsMomentum()
     if performScroll(request) {
       pendingScrollRequest = nil
     } else {
@@ -683,7 +858,7 @@ final class NativeListView: UIView {
     case let .offset(offset, animated):
       let insets = collectionView.adjustedContentInset
       let startInset = isHorizontal ? insets.left : insets.top
-      setScrollOffset(CGFloat(offset) - startInset, animated: animated)
+      setScrollOffset(CGFloat(offset) - startInset, animated: animated, explicit: true)
       return true
     case let .end(animated):
       let insets = collectionView.adjustedContentInset
@@ -693,7 +868,8 @@ final class NativeListView: UIView {
         : collectionView.contentSize.height
       setScrollOffset(
         max(0, contentLength - viewportLength + endInset),
-        animated: animated
+        animated: animated,
+        explicit: true
       )
       return true
     }
@@ -743,11 +919,11 @@ final class NativeListView: UIView {
       viewOffset: CGFloat(viewOffset),
       nearest: alignment == "nearest"
     )
-    setScrollOffset(target, animated: animated)
+    setScrollOffset(target, animated: animated, explicit: true)
     return true
   }
 
-  private func setScrollOffset(_ requestedOffset: CGFloat, animated: Bool) {
+  private func setScrollOffset(_ requestedOffset: CGFloat, animated: Bool, explicit: Bool = false) {
     let isHorizontal = config?.orientation == "horizontal"
     let insets = collectionView.adjustedContentInset
     let viewportLength = isHorizontal ? collectionView.bounds.width : collectionView.bounds.height
@@ -764,7 +940,10 @@ final class NativeListView: UIView {
     let point = isHorizontal
       ? CGPoint(x: offset, y: collectionView.contentOffset.y)
       : CGPoint(x: collectionView.contentOffset.x, y: offset)
+    if explicit { explicitScrollAnimationActive = animated && point != collectionView.contentOffset }
     collectionView.setContentOffset(point, animated: animated)
+    if metricsMomentum, !collectionView.isDecelerating { endMetricsMomentum() }
+    if explicit, !explicitScrollAnimationActive { emitScrollMetrics(phase: "geometry", force: true) }
   }
 
   private func contentLayoutDidChange() {
@@ -774,6 +953,7 @@ final class NativeListView: UIView {
       needsContentShrinkCorrection = true
     }
     lastLaidOutContentHeight = height
+    emitScrollMetrics(phase: "geometry")
     scheduleContentShrinkCorrection()
   }
 
@@ -1934,7 +2114,11 @@ final class NativeListView: UIView {
 
   func dispose() {
     guard !disposed else { return }
+    finishScrollMetrics()
     disposed = true
+    smartXViewportAnchor = nil
+    explicitScrollAnimationActive = false
+    dataUpdateEpoch &+= 1
 
     disposeActionAnchor()
     interactiveReorderAnimator?.stopAnimation(true)
@@ -1992,6 +2176,7 @@ final class NativeListView: UIView {
     onEndReached = nil
     onVisibleRangeChanged = nil
     onScrollPositionThresholdChange = nil
+    onScrollMetrics = nil
   }
 
   private func createActionAnchor(origin: NativeListActionOrigin) -> [String: Any]? {
@@ -2282,11 +2467,17 @@ extension NativeListView: UICollectionViewDelegateFlowLayout {
   }
 
   func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+    // A new gesture owns the viewport even if a diff completion is still queued.
+    smartXViewportAnchor = nil
+    explicitScrollAnimationActive = false
+    beginMetricsDrag()
     minimumDragOffset = 0
     refreshEmittedForDrag = false
   }
 
   func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+    endMetricsDrag()
+    if !decelerate { emitScrollMetrics(phase: "geometry", force: true) }
     defer { if !decelerate { scheduleContentShrinkCorrection() } }
     minimumDragOffset = min(minimumDragOffset, scrollView.contentOffset.y + scrollView.contentInset.top)
     guard let threshold = config?.refreshTriggerDistance,
@@ -2297,7 +2488,18 @@ extension NativeListView: UICollectionViewDelegateFlowLayout {
   }
 
   func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+    endMetricsMomentum()
+    emitScrollMetrics(phase: "geometry", force: true)
     scheduleContentShrinkCorrection()
+  }
+
+  func scrollViewWillBeginDecelerating(_ scrollView: UIScrollView) {
+    beginMetricsMomentum()
+  }
+
+  func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+    explicitScrollAnimationActive = false
+    emitScrollMetrics(phase: "geometry", force: true)
   }
 
   func scrollViewDidScroll(_ scrollView: UIScrollView) {
@@ -2305,6 +2507,7 @@ extension NativeListView: UICollectionViewDelegateFlowLayout {
       minimumDragOffset = min(minimumDragOffset, scrollView.contentOffset.y + scrollView.contentInset.top)
     }
     layoutContainerSlots()
+    emitScrollMetrics(phase: "scroll")
     emitScrollPositionThresholdIfNeeded()
     invalidateActionAnchor(reason: "scroll")
     syncSectionIndexToVisibleRows()

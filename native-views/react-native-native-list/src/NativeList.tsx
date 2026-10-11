@@ -29,7 +29,11 @@ import type {
   EndReachedEvent,
   VisibleRangeChangedEvent,
 } from './models';
-import type { NativeListProps, NativeListRef } from './NativeList.types';
+import type {
+  NativeListProps,
+  NativeListRef,
+  NativeListScrollMetricsEvent,
+} from './NativeList.types';
 import { isSelectableRow } from './selection';
 import {
   normalizeIndexScroll,
@@ -50,6 +54,7 @@ export type { NativeListProps, NativeListRef } from './NativeList.types';
 export type {
   ActionAnchorState,
   NativeListKeyboardDismissMode,
+  NativeListScrollMetricsEvent,
   NativeListKeyboardShouldPersistTaps,
   ScrollAlignment,
   ScrollPositionOptions,
@@ -113,6 +118,7 @@ export const NativeList = forwardRef<NativeListRef, NativeListProps>(
       onEndReached,
       onVisibleRangeChanged,
       onScrollPositionThresholdChange,
+      onScrollMetrics,
       onRefresh,
       onScrollToIndexFailed,
       initialScrollIndex,
@@ -145,6 +151,9 @@ export const NativeList = forwardRef<NativeListRef, NativeListProps>(
         ? 'never'
         : keyboardShouldPersistTaps;
     const nativeRef = useRef<NativeListMethods | null>(null);
+    const lastNativeRef = useRef<NativeListMethods | null>(null);
+    const pendingSnapshotRef = useRef(false);
+    const refreshingOverrideRef = useRef<boolean | undefined>(undefined);
     const callbacksRef = useRef({
       onRowAction,
       onActionAnchorInvalidated,
@@ -153,6 +162,7 @@ export const NativeList = forwardRef<NativeListRef, NativeListProps>(
       onEndReached,
       onVisibleRangeChanged,
       onScrollPositionThresholdChange,
+      onScrollMetrics,
       onRefresh,
       onScrollToIndexFailed,
     });
@@ -164,6 +174,7 @@ export const NativeList = forwardRef<NativeListRef, NativeListProps>(
       onEndReached,
       onVisibleRangeChanged,
       onScrollPositionThresholdChange,
+      onScrollMetrics,
       onRefresh,
       onScrollToIndexFailed,
     };
@@ -193,6 +204,9 @@ export const NativeList = forwardRef<NativeListRef, NativeListProps>(
     if (snapshotChanged) {
       snapshotRef.current = snapshot;
       previousSnapshotJsonRef.current = snapshotJson;
+      // A declarative snapshot is authoritative, including its refreshing state.
+      pendingSnapshotRef.current = false;
+      refreshingOverrideRef.current = undefined;
     }
     // OneKey patch: range events already cross the bridge only when row indices
     // change. Prefetch is optional work; scrolling and visible loads stay native.
@@ -226,6 +240,11 @@ export const NativeList = forwardRef<NativeListRef, NativeListProps>(
     updateAvatarPrefetchRef.current = updateAvatarPrefetch;
     useEffect(() => {
       avatarLifecycle.current = 'mounted';
+      // React can replay effect cleanup/setup without replacing the Fabric host.
+      // Restore only the host already accepted before that cleanup.
+      if (!nativeRef.current && lastNativeRef.current) {
+        bindNativeRefCallbackRef.current(lastNativeRef.current);
+      }
       const queue = new NativeAvatarPrefetchQueue((source) =>
         preloadNativeListAvatarImages([source])
       );
@@ -235,6 +254,7 @@ export const NativeList = forwardRef<NativeListRef, NativeListProps>(
         queue.dispose();
         avatarQueueRef.current = null;
         avatarLifecycle.current = 'unmounted';
+        nativeRef.current = null;
       };
     }, []);
     useEffect(() => {
@@ -326,10 +346,13 @@ export const NativeList = forwardRef<NativeListRef, NativeListProps>(
     useImperativeHandle(forwardedRef, () => ({
       applySnapshot(nextSnapshot) {
         const nextSnapshotJson = serializeSnapshot(nextSnapshot);
-        nativeRef.current?.applySnapshot(nextSnapshotJson);
+        const native = nativeRef.current;
+        native?.applySnapshot(nextSnapshotJson);
         snapshotRef.current = nextSnapshot;
-        if (nativeRef.current && avatarLifecycle.current !== 'unmounted') {
-          avatarModelRef.current?.replaceSnapshot(nextSnapshot.rows);
+        pendingSnapshotRef.current = !native;
+        refreshingOverrideRef.current = undefined;
+        avatarModelRef.current?.replaceSnapshot(nextSnapshot.rows);
+        if (native && avatarLifecycle.current !== 'unmounted') {
           updateAvatarPrefetchRef.current();
         }
       },
@@ -337,16 +360,19 @@ export const NativeList = forwardRef<NativeListRef, NativeListProps>(
         if (patches.length === 0) return;
         const nextSnapshot = applyRowPatches(snapshotRef.current, patches);
         const native = nativeRef.current;
-        const dispatch = native
-          ? () => {
-              native.applyPatches(serializePatches(patches));
-              snapshotRef.current = nextSnapshot;
-            }
-          : undefined;
-        if (avatarLifecycle.current === 'unmounted') {
-          dispatch?.();
+        if (!native) {
+          // The JS handle is usable before Nitro creates the native host. Keep
+          // one complete validated state instead of losing or replaying patches
+          // against a host that has never received their structural baseline.
+          snapshotRef.current = nextSnapshot;
+          pendingSnapshotRef.current = true;
+          avatarModelRef.current?.replaceSnapshot(nextSnapshot.rows);
           return;
         }
+        const dispatch = () => {
+          native.applyPatches(serializePatches(patches));
+          snapshotRef.current = nextSnapshot;
+        };
         if (avatarModelRef.current?.applyPatches(patches, dispatch))
           updateAvatarPrefetchRef.current();
       },
@@ -423,16 +449,50 @@ export const NativeList = forwardRef<NativeListRef, NativeListProps>(
       },
       setRefreshing(refreshing) {
         nativeRef.current?.setRefreshing(refreshing);
+        refreshingOverrideRef.current = refreshing;
       },
     }));
 
+    const bindNativeRef = (native: NativeListMethods) => {
+      if (avatarLifecycle.current === 'unmounted') return;
+      const replacingHost =
+        lastNativeRef.current !== null && lastNativeRef.current !== native;
+      const restoringHost =
+        nativeRef.current === null && lastNativeRef.current === native;
+      nativeRef.current = native;
+      lastNativeRef.current = native;
+      if (pendingSnapshotRef.current || replacingHost) {
+        native.applySnapshot(serializeSnapshot(snapshotRef.current));
+        pendingSnapshotRef.current = false;
+      }
+      if (
+        refreshingOverrideRef.current !== undefined &&
+        (restoringHost || replacingHost || !didApplyInitialScroll.current)
+      ) {
+        native.setRefreshing(refreshingOverrideRef.current);
+      }
+      updateAvatarPrefetchRef.current();
+      applyInitialScrollCallbackRef.current();
+    };
+    const bindNativeRefCallbackRef = useRef(bindNativeRef);
+    bindNativeRefCallbackRef.current = bindNativeRef;
+
+    const wantsScrollMetrics = onScrollMetrics != null;
     const nativeCallbacks = useMemo(
       () => ({
         hybridRef: callback((ref: NativeListMethods) => {
-          nativeRef.current = ref;
-          applyInitialScrollCallbackRef.current();
+          bindNativeRefCallbackRef.current(ref);
         }),
+        onScrollMetrics: wantsScrollMetrics
+          ? callback((payloadJson: string) => {
+              if (avatarLifecycle.current === 'unmounted') return;
+              callbacksRef.current.onScrollMetrics?.(
+                parsePayload<NativeListScrollMetricsEvent>(payloadJson)
+              );
+            })
+          : undefined,
         onRowAction: callback((payloadJson: string) => {
+          if (avatarLifecycle.current === 'unmounted') return;
           const payload = parsePayload<RowActionEvent>(payloadJson);
           if (
             payload.actionKey === 'nativeList.refresh' &&
@@ -444,11 +504,13 @@ export const NativeList = forwardRef<NativeListRef, NativeListProps>(
           callbacksRef.current.onRowAction?.(payload);
         }),
         onActionAnchorInvalidated: callback((payloadJson: string) => {
+          if (avatarLifecycle.current === 'unmounted') return;
           callbacksRef.current.onActionAnchorInvalidated?.(
             parsePayload<ActionAnchorInvalidatedEvent>(payloadJson)
           );
         }),
         onSelectionDelta: callback((payloadJson: string) => {
+          if (avatarLifecycle.current === 'unmounted') return;
           const payload = parsePayload<SelectionDeltaEvent>(payloadJson);
           const current = snapshotRef.current;
           if (current.selection) {
@@ -466,23 +528,27 @@ export const NativeList = forwardRef<NativeListRef, NativeListProps>(
           callbacksRef.current.onSelectionDelta?.(payload);
         }),
         onReorder: callback((payloadJson: string) => {
+          if (avatarLifecycle.current === 'unmounted') return;
           callbacksRef.current.onReorder?.(
             parsePayload<ReorderEvent>(payloadJson)
           );
         }),
         onEndReached: callback((payloadJson: string) => {
+          if (avatarLifecycle.current === 'unmounted') return;
           callbacksRef.current.onEndReached?.(
             parsePayload<EndReachedEvent>(payloadJson)
           );
         }),
         onScrollPositionThresholdChange: callback(
           (isBeyondThreshold: boolean) => {
+            if (avatarLifecycle.current === 'unmounted') return;
             callbacksRef.current.onScrollPositionThresholdChange?.({
               isBeyondThreshold,
             });
           }
         ),
         onVisibleRangeChanged: callback((payloadJson: string) => {
+          if (avatarLifecycle.current === 'unmounted') return;
           const payload = parsePayload<VisibleRangeChangedEvent>(payloadJson);
           const previous = avatarRangeRef.current;
           avatarRangeRef.current = {
@@ -497,7 +563,7 @@ export const NativeList = forwardRef<NativeListRef, NativeListProps>(
           callbacksRef.current.onVisibleRangeChanged?.(payload);
         }),
       }),
-      []
+      [wantsScrollMetrics]
     );
 
     return (

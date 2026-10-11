@@ -90,6 +90,7 @@ final class NativeListSystemCell: NativeListRendererCell {
     button.setAttributedTitle(nil, for: .normal)
     button.setTitle(nil, for: .normal)
     button.isHidden = true
+    button.accessibilityIdentifier = item.data["actionTestID"] as? String
     button.titleLabel?.font = nativeListFont(ofSize: 16, weight: .medium)
     button.titleLabel?.numberOfLines = 1
     button.contentEdgeInsets = .zero
@@ -381,13 +382,14 @@ final class NativeListSystemCell: NativeListRendererCell {
     }
     root.addArrangedSubview(mainStack)
     if variant == "retry" {
-      showAccessory(0, "Retry", action: (item.data.string("actionKey"), nil))
+      let text = item.data.string("actionText", default: "Retry")
+      showAccessory(0, text, action: (item.data.string("actionKey"), nil))
       accessoryButtons[0].backgroundColor = nativeListColor(theme, "strongBackground", "#F0F0F0")
       accessoryButtons[0].layer.cornerRadius = 14
       accessoryButtons[0].contentEdgeInsets = UIEdgeInsets(top: 4, left: 10, bottom: 4, right: 10)
       setButtonLine(
         accessoryButtons[0],
-        text: "Retry",
+        text: text,
         font: nativeListFont(ofSize: 14, weight: .medium),
         color: nativeListColor(theme, "primaryText", "#202020"),
         lineHeight: 20

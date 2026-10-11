@@ -22,6 +22,17 @@ export type ScrollAlignment = 'start' | 'center' | 'end' | 'nearest';
 
 export type NativeListKeyboardDismissMode = 'none' | 'on-drag' | 'interactive';
 
+/** Observed native geometry, including named container slots. */
+export type NativeListScrollMetricsEvent = Readonly<{
+  phase: 'scroll' | 'beginDrag' | 'endDrag' | 'beginMomentum' | 'endMomentum' | 'geometry';
+  offsetX: number;
+  offsetY: number;
+  contentWidth: number;
+  contentHeight: number;
+  viewportWidth: number;
+  viewportHeight: number;
+}>;
+
 export type NativeListKeyboardShouldPersistTaps =
   | 'never'
   | 'always'
@@ -135,6 +146,8 @@ export type NativeListProps = Omit<ViewProps, 'children'> &
      */
     keyboardShouldPersistTaps?: NativeListKeyboardShouldPersistTaps | boolean;
     onRowAction?: (event: RowActionEvent) => void;
+    /** Native only. Frames are throttled to 16 ms; final/geometry events are immediate. */
+    onScrollMetrics?: (event: NativeListScrollMetricsEvent) => void;
     onActionAnchorInvalidated?: (event: ActionAnchorInvalidatedEvent) => void;
     onSelectionDelta?: (event: SelectionDeltaEvent) => void;
     onReorder?: (event: ReorderEvent) => void;

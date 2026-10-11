@@ -18,6 +18,10 @@ enum NativeListRendererRegistry {
       .activity: (NativeListActivityCell.self, { NativeListActivityCell(frame: .zero) }),
       .system: (NativeListSystemCell.self, { NativeListSystemCell(frame: .zero) }),
       .action: (NativeListActionCell.self, { NativeListActionCell(frame: .zero) }),
+      .smartxOpinion: (NativeListSmartXCell.self, { NativeListSmartXCell(frame: .zero) }),
+      .smartxTrade: (NativeListSmartXCell.self, { NativeListSmartXCell(frame: .zero) }),
+      .smartxMilestone: (NativeListSmartXCell.self, { NativeListSmartXCell(frame: .zero) }),
+      .smartxAnnouncement: (NativeListSmartXCell.self, { NativeListSmartXCell(frame: .zero) }),
       .unsupported: (
         NativeListUnsupportedCell.self, { NativeListUnsupportedCell(frame: .zero) }
       ),

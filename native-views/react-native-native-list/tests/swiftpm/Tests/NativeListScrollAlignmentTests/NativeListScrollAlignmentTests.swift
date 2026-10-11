@@ -71,4 +71,49 @@ final class NativeListScrollAlignmentTests: XCTestCase {
                                                  startInset: 8, endInset: 12), -8)
     }
   }
+
+  func testSmartXAnchorSurvivesAppendAndHeightChanges() {
+    XCTAssertEqual(nativeListSurvivingAnchorKey(key: "b", oldKeys: ["a", "b", "c"],
+                                               currentKeys: ["a", "b", "c", "d"]), "b")
+    // A row shifting down after the announcement expands retains its -20px offset.
+    XCTAssertEqual(nativeListClampedScrollOffset(520 - (-20), viewportLength: 400,
+                                                 contentLength: 1400, startInset: 0,
+                                                 endInset: 0), 540)
+  }
+
+  func testSmartXDeletedAnchorPrefersNearestOldSuccessorThenPredecessor() {
+    let old = ["a", "b", "c", "d", "e"]
+    XCTAssertEqual(nativeListSurvivingAnchorKey(key: "c", oldKeys: old,
+                                               currentKeys: ["a", "b", "e", "new"]), "e")
+    XCTAssertEqual(nativeListSurvivingAnchorKey(key: "c", oldKeys: old,
+                                               currentKeys: ["a", "b", "new"]), "b")
+    XCTAssertNil(nativeListSurvivingAnchorKey(key: "c", oldKeys: old, currentKeys: ["new"]))
+    XCTAssertNil(nativeListSurvivingAnchorKey(key: "absent", oldKeys: old, currentKeys: ["a"]))
+  }
+
+  func testScrollMetricsThrottleOnlyScrollFrames() {
+    var delivery = NativeListScrollMetricsDelivery()
+    let geometry: [Double] = [0, 70, 390, 1400, 390, 800]
+    XCTAssertTrue(delivery.shouldEmit(phase: "scroll", time: 1, geometry: geometry))
+    XCTAssertFalse(delivery.shouldEmit(phase: "scroll", time: 1.008, geometry: geometry))
+    for phase in ["beginDrag", "endDrag", "beginMomentum", "endMomentum", "geometry"] {
+      XCTAssertTrue(delivery.shouldEmit(phase: phase, time: 1.009, geometry: geometry))
+    }
+    XCTAssertTrue(delivery.shouldEmit(phase: "scroll", time: 1.017, geometry: geometry))
+  }
+
+  func testScrollMetricsGeometryChangesAndForcedTerminalDelivery() {
+    var delivery = NativeListScrollMetricsDelivery()
+    var geometry: [Double] = [0, 70, 390, 1400, 390, 800]
+    XCTAssertTrue(delivery.shouldEmit(phase: "geometry", time: 1, geometry: geometry))
+    geometry[1] = 100
+    XCTAssertFalse(delivery.shouldEmit(phase: "geometry", time: 1.001, geometry: geometry))
+    geometry[3] = 1800
+    XCTAssertTrue(delivery.shouldEmit(phase: "geometry", time: 1.002, geometry: geometry))
+    XCTAssertTrue(delivery.shouldEmit(phase: "geometry", time: 1.003, geometry: geometry, force: true))
+    delivery.reset()
+    XCTAssertTrue(delivery.shouldEmit(phase: "geometry", time: 1.004, geometry: geometry))
+    geometry[1] = .nan
+    XCTAssertFalse(delivery.shouldEmit(phase: "endMomentum", time: 2, geometry: geometry))
+  }
 }

@@ -19,7 +19,6 @@
     "lib",
     "android",
     "ios",
-    "common",
     "cpp",
     "nitrogen",
     "nitro.json",
@@ -84,7 +83,8 @@
     "react-native": "patch:react-native@npm%3A0.86.2#~/.yarn/patches/react-native-npm-0.86.2-c9d546616f.patch",
     "react-native-builder-bob": "^0.40.13",
     "react-native-nitro-modules": "0.37.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "@react-native/jest-preset": "0.86.2"
   },
   "peerDependencies": {
     "@onekeyfe/react-native-image": "3.0.170",
@@ -119,7 +119,7 @@
     ]
   },
   "jest": {
-    "preset": "react-native",
+    "preset": "@react-native/jest-preset",
     "modulePathIgnorePatterns": [
       "<rootDir>/lib/"
     ]

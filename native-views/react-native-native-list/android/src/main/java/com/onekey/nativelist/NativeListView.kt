@@ -95,6 +95,21 @@ class NativeListView(
     val offset: Int,
   )
 
+  private data class SmartXAnchor(
+    val key: String,
+    val previousKeys: List<String>,
+    val targetItems: List<NativeListItem>,
+    val offset: Int,
+    val scrollAuthority: Long,
+  )
+
+  private data class ScrollGeometry(
+    val contentWidth: Int,
+    val contentHeight: Int,
+    val viewportWidth: Int,
+    val viewportHeight: Int,
+  )
+
   private class ActionAnchorRecord(
     val token: String,
     origin: NativeListActionOrigin,
@@ -129,6 +144,7 @@ class NativeListView(
 
   private val coordinatorOffsetListener = Runnable { emitScrollPositionThresholdIfNeeded() }
   private var logicalScrollDistancePx = 0
+  private var logicalHorizontalScrollDistancePx = 0
   private val scrollPositionTracker = NativeListScrollPositionTracker()
   private val measuredRowExtentsPx = HashMap<String, Int>()
   private var measuredRowExtentSumPx = 0L
@@ -137,6 +153,36 @@ class NativeListView(
       field = value
       scrollPositionTracker.resetDelivery()
       emitScrollPositionThresholdIfNeeded(resync = true)
+    }
+
+  private val scrollMetricsHandler = Handler(Looper.getMainLooper())
+  private val scrollInteractionState = NativeListScrollInteractionState()
+  private var lastScrollMetricsAtMs = Long.MIN_VALUE
+  private var scrollMetricsScheduled = false
+  private var scrollGeometryScheduled = false
+  private var lastScrollGeometry: ScrollGeometry? = null
+  private var contentExtentPx = 0
+  private var scrollAuthority = 0L
+  private var pendingSmartXAnchor: SmartXAnchor? = null
+  private val scrollMetricsRunnable = Runnable {
+    scrollMetricsScheduled = false
+    emitScrollMetrics("scroll")
+  }
+  private val scrollGeometryRunnable = Runnable {
+    scrollGeometryScheduled = false
+    updateScrollMetricsGeometry(resyncOffset = false)
+  }
+  var onScrollMetrics: ((String) -> Unit)? = null
+    set(value) {
+      if (field === value) return
+      finishScrollMetricsInteraction()
+      field = value
+      lastScrollGeometry = null
+      lastScrollMetricsAtMs = Long.MIN_VALUE
+      if (value != null && isAttachedToWindow && !disposed) {
+        updateScrollMetricsGeometry()
+        updateScrollMetricsInteraction(recyclerView.scrollState)
+      }
     }
 
   fun setScrollPositionThresholdsJson(json: String) {
@@ -258,6 +304,10 @@ class NativeListView(
     val key = adapter.itemAt(holder.bindingAdapterPosition)?.key ?: return
     val previous = measuredRowExtentsPx.put(key, extentPx)
     measuredRowExtentSumPx += extentPx - (previous ?: 0)
+    if (previous != extentPx && onScrollMetrics != null && !scrollGeometryScheduled && isAttachedToWindow) {
+      scrollGeometryScheduled = true
+      scrollMetricsHandler.post(scrollGeometryRunnable)
+    }
   }
 
   private fun pruneMeasuredRowExtents(items: List<NativeListItem>) {
@@ -284,6 +334,10 @@ class NativeListView(
 
   private fun measuredScrollDistancePx(): Int? {
     if (layoutManager.orientation != RecyclerView.VERTICAL) return null
+    return measuredAxisScrollDistancePx()
+  }
+
+  private fun measuredAxisScrollDistancePx(): Int? {
     val first = layoutManager.findFirstVisibleItemPosition()
     if (first == RecyclerView.NO_POSITION) return null
     val view = layoutManager.findViewByPosition(first) ?: return null
@@ -293,9 +347,104 @@ class NativeListView(
       layoutManager.spanSizeLookup::getSpanSize,
       ::estimatedScrollExtentPx,
     )
-    val topMargin = (view.layoutParams as? ViewGroup.MarginLayoutParams)?.topMargin ?: 0
-    val top = layoutManager.getDecoratedTop(view) - topMargin
-    return (prefix + recyclerView.paddingTop - top).coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
+    val params = view.layoutParams as? ViewGroup.MarginLayoutParams
+    val vertical = layoutManager.orientation == RecyclerView.VERTICAL
+    val start = if (vertical) layoutManager.getDecoratedTop(view) - (params?.topMargin ?: 0)
+      else layoutManager.getDecoratedLeft(view) - (params?.leftMargin ?: 0)
+    val padding = if (vertical) recyclerView.paddingTop else recyclerView.paddingLeft
+    return (prefix + padding - start).coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
+  }
+
+  private fun updateScrollMetricsGeometry(resyncOffset: Boolean = true) {
+    if (onScrollMetrics == null || disposed || !isAttachedToWindow) return
+    scrollMetricsHandler.removeCallbacks(scrollGeometryRunnable)
+    scrollGeometryScheduled = false
+    val count = scrollContentAdapter.itemCount
+    val vertical = layoutManager.orientation == RecyclerView.VERTICAL
+    // Unlaid-out rows use the same bounded extent estimate as threshold tracking.
+    // Consumed scroll deltas remain exact between structural/layout changes.
+    val extent = nativeListScrollPrefixPx(
+      count,
+      layoutManager.spanCount,
+      { if (it == count) layoutManager.spanCount else layoutManager.spanSizeLookup.getSpanSize(it) },
+      ::estimatedScrollExtentPx,
+    )
+    val padding = if (vertical) recyclerView.paddingTop + recyclerView.paddingBottom
+      else recyclerView.paddingLeft + recyclerView.paddingRight
+    contentExtentPx = (extent + padding).coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
+    if (count == 0) {
+      logicalScrollDistancePx = 0
+      logicalHorizontalScrollDistancePx = 0
+    }
+    if (resyncOffset) {
+      measuredAxisScrollDistancePx()?.let {
+        if (vertical) logicalScrollDistancePx = it else logicalHorizontalScrollDistancePx = it
+      }
+    }
+    val geometry = currentScrollGeometry()
+    if (geometry != lastScrollGeometry) {
+      lastScrollGeometry = geometry
+      emitScrollMetrics("geometry")
+    }
+  }
+
+  private fun currentScrollGeometry(): ScrollGeometry {
+    val vertical = layoutManager.orientation == RecyclerView.VERTICAL
+    return ScrollGeometry(
+      contentWidth = if (vertical) recyclerView.width else contentExtentPx,
+      contentHeight = if (vertical) contentExtentPx else recyclerView.height,
+      viewportWidth = recyclerView.width,
+      viewportHeight = recyclerView.height,
+    )
+  }
+
+  private fun emitScrollMetrics(phase: String) {
+    if (disposed || !isAttachedToWindow) return
+    val callback = onScrollMetrics ?: return
+    val geometry = currentScrollGeometry()
+    if (phase == "scroll") lastScrollMetricsAtMs = SystemClock.uptimeMillis()
+    callback(JSONObject()
+      .put("phase", phase)
+      .put("offsetX", if (layoutManager.orientation == RecyclerView.HORIZONTAL) logicalHorizontalScrollDistancePx / density.toDouble() else 0.0)
+      .put("offsetY", if (layoutManager.orientation == RecyclerView.VERTICAL) logicalScrollDistancePx / density.toDouble() else 0.0)
+      .put("contentWidth", geometry.contentWidth / density.toDouble())
+      .put("contentHeight", geometry.contentHeight / density.toDouble())
+      .put("viewportWidth", geometry.viewportWidth / density.toDouble())
+      .put("viewportHeight", geometry.viewportHeight / density.toDouble())
+      .toString())
+  }
+
+  private fun scheduleScrollMetrics() {
+    if (onScrollMetrics == null || disposed || !isAttachedToWindow || scrollMetricsScheduled) return
+    val now = SystemClock.uptimeMillis()
+    val elapsed = if (lastScrollMetricsAtMs == Long.MIN_VALUE) 16L else now - lastScrollMetricsAtMs
+    if (elapsed >= 16L) {
+      emitScrollMetrics("scroll")
+    } else {
+      scrollMetricsScheduled = true
+      scrollMetricsHandler.postDelayed(scrollMetricsRunnable, 16L - elapsed)
+    }
+  }
+
+  private fun updateScrollMetricsInteraction(state: Int) {
+    if (onScrollMetrics == null || disposed || !isAttachedToWindow) return
+    val next = when (state) {
+      RecyclerView.SCROLL_STATE_DRAGGING -> NativeListScrollInteractionState.State.DRAG
+      RecyclerView.SCROLL_STATE_SETTLING -> NativeListScrollInteractionState.State.MOMENTUM
+      else -> NativeListScrollInteractionState.State.IDLE
+    }
+    // Terminal phase payloads include the final observed offset even inside the throttle window.
+    scrollMetricsHandler.removeCallbacks(scrollMetricsRunnable)
+    scrollMetricsScheduled = false
+    scrollInteractionState.transition(next).forEach(::emitScrollMetrics)
+  }
+
+  private fun finishScrollMetricsInteraction() {
+    scrollMetricsHandler.removeCallbacks(scrollMetricsRunnable)
+    scrollMetricsHandler.removeCallbacks(scrollGeometryRunnable)
+    scrollMetricsScheduled = false
+    scrollGeometryScheduled = false
+    scrollInteractionState.transition(NativeListScrollInteractionState.State.IDLE).forEach(::emitScrollMetrics)
   }
   private fun rowPositionForScroll(index: Int): Int =
     if (index == RecyclerView.NO_POSITION) RecyclerView.NO_POSITION else index - headerSlotAdapter.itemCount
@@ -517,6 +666,7 @@ class NativeListView(
     layoutManager.onChildLaidOut = ::recordLaidOutRowExtent
     layoutManager.onLayoutPassCompleted = {
       emitScrollPositionThresholdIfNeeded(resync = true)
+      updateScrollMetricsGeometry()
       if (containerSlotRelayoutPending) scheduleContainerSlotRelayout()
     }
     recyclerView.setHasFixedSize(false)
@@ -603,12 +753,14 @@ class NativeListView(
       // OneKey patch: a collapsible pager owns the extra padding above the rows.
       // Keep the refresh control below that header without moving ordinary lists.
       updateRefreshIndicatorOffset((recyclerView.paddingTop - configuredTopPaddingPx).coerceAtLeast(0))
+      updateScrollMetricsGeometry()
     }
 
     recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
       override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
         when (newState) {
           RecyclerView.SCROLL_STATE_DRAGGING -> {
+            cancelSmartXAnchor()
             sectionIndexProgrammaticScroll = false
             invalidateActionAnchor("scroll")
             if (
@@ -620,11 +772,24 @@ class NativeListView(
           }
           RecyclerView.SCROLL_STATE_IDLE -> sectionIndexProgrammaticScroll = false
         }
+        updateScrollMetricsInteraction(newState)
       }
 
       override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
         logicalScrollDistancePx = (logicalScrollDistancePx + dy).coerceAtLeast(0)
+        logicalHorizontalScrollDistancePx = (logicalHorizontalScrollDistancePx + dx).coerceAtLeast(0)
+        pendingSmartXAnchor = pendingSmartXAnchor?.let { anchor ->
+          anchor.copy(offset = anchor.offset - if (layoutManager.orientation == RecyclerView.VERTICAL) dy else dx)
+        }
         emitScrollPositionThresholdIfNeeded(resync = dx == 0 && dy == 0)
+        if (onScrollMetrics != null && layoutManager.findFirstVisibleItemPosition() == 0) {
+          measuredAxisScrollDistancePx()?.let {
+            if (layoutManager.orientation == RecyclerView.VERTICAL) logicalScrollDistancePx = it
+            else logicalHorizontalScrollDistancePx = it
+          }
+        }
+        if (dx == 0 && dy == 0) updateScrollMetricsGeometry()
+        scheduleScrollMetrics()
         if (dx != 0 || dy != 0) invalidateActionAnchor("scroll")
         syncSectionIndexToVisibleRows()
         scheduleVisibleEvent()
@@ -710,6 +875,8 @@ class NativeListView(
     if (containerSlotRelayoutPending) scheduleContainerSlotRelayout()
     recyclerView.setTag(R.id.onekey_native_scroll_coordinator_offset_listener, coordinatorOffsetListener)
     emitScrollPositionThresholdIfNeeded()
+    updateScrollMetricsGeometry()
+    updateScrollMetricsInteraction(recyclerView.scrollState)
     startStickyHeaderTracking()
     updateSectionIndexAttachment()
     val first = config?.items?.firstOrNull()
@@ -719,6 +886,9 @@ class NativeListView(
   }
 
   override fun onDetachedFromWindow() {
+    finishScrollMetricsInteraction()
+    lastScrollGeometry = null
+    cancelSmartXAnchor()
     if (recyclerView.getTag(R.id.onekey_native_scroll_coordinator_offset_listener) === coordinatorOffsetListener) {
       recyclerView.setTag(R.id.onekey_native_scroll_coordinator_offset_listener, null)
     }
@@ -738,6 +908,7 @@ class NativeListView(
     }
     invalidateActionAnchor("snapshot")
     val previous = config
+    preserveSmartXAnchorForUpdate(previous, next)
     if (previous != null && canApplyStableContentUpdate(previous, next)) {
       // OneKey patch: authorize a diff payload only against this exact validated baseline.
       next.items.forEachIndexed { index, item ->
@@ -768,6 +939,8 @@ class NativeListView(
         // OneKey patch: DiffUtil has dispatched its payloads; release the old serialized rows.
         next.items.forEach { it.selectionUpdateFromContent = null }
         recyclerView.post {
+          if (config?.items !== next.items) return@post
+          if (pendingSmartXAnchor != null) relayoutContents()
           bindVisibleSelection(changedSummaryKeys)
           bindFooterSelection()
           performPendingScrollIfNeeded()
@@ -805,6 +978,7 @@ class NativeListView(
     configureSectionIndex(next)
     updateLayout(next)
     adapter.submitList(next.items) {
+      if (config?.items !== next.items) return@submitList
       if (marketStartOffset != null) {
         layoutManager.scrollToPositionWithOffset(scrollPositionForRow(0), marketStartOffset)
       }
@@ -830,6 +1004,62 @@ class NativeListView(
       key = item.key,
       offset = layoutManager.getDecoratedTop(view) - recyclerView.paddingTop,
     )
+  }
+
+  private fun cancelSmartXAnchor() {
+    scrollAuthority += 1
+    pendingSmartXAnchor = null
+  }
+
+  private fun preserveSmartXAnchorForUpdate(previous: NativeListConfig?, next: NativeListConfig) {
+    if (previous == null || pendingScrollRequest != null ||
+      previous.orientation != next.orientation || previous.layout != next.layout ||
+      previous.items.none { it.type in SMARTX_TYPES } || next.items.none { it.type in SMARTX_TYPES }) {
+      pendingSmartXAnchor = null
+      return
+    }
+    val changed = previous.items.size != next.items.size ||
+      previous.items.indices.any { previous.items[it].content != next.items[it].content } ||
+      previous.listStyle?.toString() != next.listStyle?.toString() || previous.theme != next.theme
+    if (pendingSmartXAnchor?.scrollAuthority == scrollAuthority) {
+      pendingSmartXAnchor = pendingSmartXAnchor?.copy(targetItems = next.items)
+      return
+    }
+    if (!changed) return
+    val first = layoutManager.findFirstVisibleItemPosition()
+    if (first == RecyclerView.NO_POSITION) return
+    // A visible header slot is not a data row. Preserve the actual top instead of
+    // shifting a partially shown slot away by selecting the next row as anchor.
+    if (first < headerSlotAdapter.itemCount) return
+    val row = rowPositionForScroll(first)
+    val item = adapter.itemAt(row) ?: return
+    val view = layoutManager.findViewByPosition(first) ?: return
+    val vertical = layoutManager.orientation == RecyclerView.VERTICAL
+    val margin = (view.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
+      if (vertical) it.topMargin else it.leftMargin
+    } ?: 0
+    val padding = if (vertical) recyclerView.paddingTop else recyclerView.paddingLeft
+    pendingSmartXAnchor = SmartXAnchor(
+      key = item.key,
+      previousKeys = adapter.currentList.map { it.key },
+      targetItems = next.items,
+      offset = decoratedStart(layoutManager, view) - margin - padding,
+      scrollAuthority = scrollAuthority,
+    )
+  }
+
+  private fun restorePendingSmartXAnchor() {
+    val anchor = pendingSmartXAnchor ?: return
+    // A newer async diff may have superseded the update whose relayout was posted.
+    // Only its committed rows may consume the saved anchor.
+    if (adapter.currentList.size != anchor.targetItems.size ||
+      adapter.currentList.indices.any { adapter.currentList[it] !== anchor.targetItems[it] }) return
+    pendingSmartXAnchor = null
+    if (anchor.scrollAuthority != scrollAuthority || pendingScrollRequest != null) return
+    val keys = adapter.currentList.mapTo(HashSet()) { it.key }
+    val target = nativeListSmartXAnchorKey(anchor.key, anchor.previousKeys, keys) ?: return
+    val index = adapter.currentList.indexOfFirst { it.key == target }
+    if (index >= 0) layoutManager.scrollToPositionWithOffset(scrollPositionForRow(index), anchor.offset)
   }
 
   private fun isMarketPaginationUpdate(
@@ -1032,12 +1262,13 @@ class NativeListView(
     }
     if (!marketQuoteOnly) invalidateActionAnchor("snapshot")
     val next = current.copy(items = nextItems, selectedKeys = selected)
+    preserveSmartXAnchorForUpdate(current, next)
     config = next
     updateContainerSlots()
     usesSelectorSourceScale = next.items.any { it.usesSelectorSourceScale }
     adapter.usesSelectorSourceScale = usesSelectorSourceScale
     adapter.selectedKeys = selected
-    adapter.submitList(nextItems) { relayoutContents() }
+    adapter.submitList(nextItems) { if (config?.items === next.items) relayoutContents() }
     bindFooter(next)
   }
 
@@ -1090,6 +1321,7 @@ class NativeListView(
   }
 
   private fun requestScroll(request: ScrollRequest) {
+    cancelSmartXAnchor()
     if (performScroll(request)) {
       pendingScrollRequest = null
     } else {
@@ -1396,6 +1628,9 @@ class NativeListView(
 
   fun dispose() {
     if (disposed) return
+    finishScrollMetricsInteraction()
+    onScrollMetrics = null
+    cancelSmartXAnchor()
     disposed = true
     containerSlotRelayoutPending = false
     onScrollPositionThresholdChange = null
@@ -2557,6 +2792,7 @@ class NativeListView(
   private fun relayoutContents(preserveMarketPaginationAnchor: Boolean = false) {
     post {
       if (disposed || width <= 0 || height <= 0) return@post
+      restorePendingSmartXAnchor()
       val anchor = if (preserveMarketPaginationAnchor) {
         captureVisibleMarketAnchor()
       } else {
@@ -2705,6 +2941,7 @@ class NativeListView(
     private const val REORDER_RELAYOUT_LOG_INTERVAL_MS = 100L
     private const val REORDER_LOG_TAG = "NativeListReorder"
     private const val ROW_ACTION = "rowAction"
+    private val SMARTX_TYPES = setOf("smartxOpinion", "smartxTrade", "smartxMilestone", "smartxAnnouncement")
     private const val ACTION_ANCHOR_INVALIDATED = "actionAnchorInvalidated"
     private const val SELECTION_DELTA = "selectionDelta"
     private const val REORDER = "reorder"

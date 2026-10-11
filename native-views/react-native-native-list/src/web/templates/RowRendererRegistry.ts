@@ -1,3 +1,4 @@
+import type { SmartXRow } from '../../SmartX.models';
 import type { WalletGroupRow } from '../../models';
 import { walletGroupRowRenderer } from './WalletGroupRowRenderer';
 import type { IdentityRow, SectionHeaderRow } from '../../models';
@@ -73,7 +74,7 @@ const factories = {
   mediaTile: (row: RowModel) =>
     registration(mediaTileRowRenderer, row as MediaTileRow),
 } satisfies Record<
-  RowModel['type'],
+  RowRendererKey,
   (row: RowModel) => ReturnType<typeof registration>
 >;
 const renderers = {
@@ -90,7 +91,7 @@ const renderers = {
   rail: railRowRenderer,
   mediaTile: mediaTileRowRenderer,
 };
-export type RowRendererKey = RowModel['type'];
+export type RowRendererKey = Exclude<RowModel['type'], SmartXRow['type']>;
 const isRegistered = (key: string): key is keyof typeof factories =>
   Object.prototype.hasOwnProperty.call(factories, key);
 
@@ -101,6 +102,8 @@ export function rowRenderer(row: RowModel) {
   return factories[row.type](row);
 }
 export function rowRendererKey(row: RowModel): RowRendererKey {
+  if (!isRegistered(row.type))
+    throw new Error('No Web renderer registered for ' + row.type);
   return row.type;
 }
 export function recycleRowBody(body: HTMLElement): boolean {

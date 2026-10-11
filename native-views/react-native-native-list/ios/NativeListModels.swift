@@ -4,6 +4,7 @@ import UIKit
 // Template type alone partitions reuse; data keys and styles never select a renderer.
 enum NativeListRendererKey: String, CaseIterable {
   case message, rail, mediaTile, action, system, activity, dataRow, metricCard, market, identity, sectionHeader, walletGroup
+  case smartxOpinion, smartxTrade, smartxMilestone, smartxAnnouncement
   /// Not a template: legacy accepted any non-empty type and drew an empty row with the
   /// shared chrome. Unknown types keep that placeholder instead of failing the snapshot.
   case unsupported = "__nativeListUnsupported"
@@ -35,7 +36,8 @@ struct NativeListItem {
   }
 
   var isRowPressEnabled: Bool {
-    !data.bool("disabled") &&
+    !["smartxOpinion", "smartxTrade", "smartxMilestone", "smartxAnnouncement"].contains(type) &&
+      !data.bool("disabled") &&
       !data.bool("pressDisabled") &&
       (type != "system" || data.string("variant") == "retry")
   }

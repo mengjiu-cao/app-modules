@@ -1,3 +1,4 @@
+import type { SmartXRow, SmartXRowPatch } from './SmartX.models';
 export type NativeListLayout = 'linear' | 'sectioned' | 'grid' | 'table';
 export type NativeListOrientation = 'vertical' | 'horizontal';
 export type RowSize = 'small' | 'medium' | 'large';
@@ -105,6 +106,10 @@ export type RowBoxStyle = Readonly<{
 
 /** Template-owned slots determine which local box parameters exist, on every platform. */
 export const ROW_BOX_STYLE_KEYS_BY_TYPE = {
+  smartxOpinion: [],
+  smartxTrade: [],
+  smartxMilestone: [],
+  smartxAnnouncement: [],
   identity: [
     'horizontalPadding',
     'verticalPadding',
@@ -718,6 +723,8 @@ export type SystemRow = RowBase &
         message: string;
         actionKey: string;
         actionText?: string;
+        /** Native retry button identifier; row.testID remains the row container. */
+        actionTestID?: string;
       }>
     | Readonly<{
         type: 'system';
@@ -742,6 +749,7 @@ export type SystemRow = RowBase &
   );
 
 export type RowModel =
+  | SmartXRow
   | IdentityRow
   | WalletGroupRow
   | RailRow
@@ -870,6 +878,7 @@ type CommonPatchFields =
   | 'style';
 
 export type RowPatch =
+  | SmartXRowPatch
   | Readonly<{
       type: 'identity';
       key: string;
@@ -1064,6 +1073,7 @@ export type RowPatch =
         revision?: number;
         disabled?: boolean;
         message?: string;
+        actionTestID?: string;
       }>;
     }>;
 

@@ -36,6 +36,15 @@ final class HybridNativeList: HybridNativeListSpec {
     }
   }
 
+  var onScrollMetrics: ((String) -> Void)? {
+    didSet {
+      runOnMain { [weak self] in
+        guard let self else { return }
+        self.hostView?.onScrollMetrics = self.onScrollMetrics
+      }
+    }
+  }
+
   var snapshotJson: String = "" {
     didSet {
       guard snapshotJson != oldValue else { return }
@@ -186,6 +195,7 @@ final class HybridNativeList: HybridNativeListSpec {
     onEndReached = nil
     onVisibleRangeChanged = nil
     onScrollPositionThresholdChange = nil
+    onScrollMetrics = nil
     hostView.dispose()
     self.hostView = nil
     snapshotJson = ""

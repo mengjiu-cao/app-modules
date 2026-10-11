@@ -57,7 +57,7 @@ private fun updateLengthPrefixed(digest: MessageDigest, value: String) {
 }
 
 // Template type alone partitions reuse; data keys and styles never select a renderer.
-internal enum class NativeListRendererKey { MESSAGE, RAIL, MEDIA_TILE, ACTION, SYSTEM, ACTIVITY, DATA_ROW, METRIC_CARD, MARKET, IDENTITY, SECTION_HEADER, WALLET_GROUP }
+internal enum class NativeListRendererKey { MESSAGE, RAIL, MEDIA_TILE, ACTION, SYSTEM, ACTIVITY, DATA_ROW, METRIC_CARD, MARKET, IDENTITY, SECTION_HEADER, WALLET_GROUP, SMARTX_OPINION, SMARTX_TRADE, SMARTX_MILESTONE, SMARTX_ANNOUNCEMENT }
 
 internal data class NativeListItem(
   val key: String,

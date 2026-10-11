@@ -673,3 +673,132 @@ The consumer Gradle project compiles the actual NativeListView and passes all
 seven Kotlin alignment tests; SwiftPM compiles the shipping helper and passes
 all seven geometry tests. These are local unit/build checks, not a new
 combined-package application or physical-device acceptance run.
+
+## SmartX Square extension (2026-10-11)
+
+Status: Implemented candidate; full native linkage, device acceptance and Release performance comparison are pending.
+
+### Scope and ownership
+
+The SmartX fork adds four native-only templates: `smartxOpinion`, `smartxTrade`,
+`smartxMilestone`, and `smartxAnnouncement`. Their finite presentation contract
+is defined by `src/SmartX.models.ts`. No arbitrary React data-row children,
+HTML, application networking, transaction execution, or financial calculation
+enters a renderer. The consumer owns pagination, refresh, formatted strings,
+optimistic writes, navigation, announcement expansion state, and business
+revision. Existing templates and their public behavior remain supported.
+
+### Template and action contract
+
+Each new row uses the existing stable `key`, optional revision and finite
+`smartx` payload. It contains named author, content, token/position, engagement,
+announcement, theme/font, asset URI, accessibility and action slots. Each action
+carries an opaque `key`; native returns it unchanged as `actionKey` together with
+`rowKey`. The existing binding epoch invalidates callbacks during reuse. The
+consumer additionally rejects actions absent from the current binding map.
+
+SmartX content validation rejects unknown named slots, invalid enum/boolean values,
+non-finite font scales and non-hex colors before serialization. Colors are
+`#RRGGBB` or `#RRGGBBAA`; the consumer normalizes semantic rgba tokens. Required
+asset URIs and font names are non-empty. Text does not inherit the legacy
+4096-character template cap. Followed-like avatars are limited to the existing
+three visible actors, and milestone values to the existing three metrics.
+
+A SmartX patch atomically replaces the complete `smartx` payload for the same
+key and type, including clearing omitted optional slots. Structure changes
+continue to use snapshots. Pixel geometry must use the supplied IBM Plex font
+families, semantic theme and caller-provided font scale, with no financial or
+localization interpretation. App-supplied assets retain their original shapes;
+no substitute glyph is a visual-equivalence claim. The new templates are used
+only on iOS/Android; the consumer's Web path remains FlashList. The Web closed
+registry explicitly rejects SmartX types instead of selecting a legacy renderer.
+
+For native system retry chrome, optional `actionTestID` identifies the retry
+button independently from row `testID`; omitted values retain the existing
+identifier behavior. It is a non-empty key (at most 256 characters), is also
+accepted by system patches, and is rejected on non-retry snapshots. This is
+accessibility/automation metadata only and does not change the retry action.
+
+### Native host readiness
+
+The JS imperative handle may become available before Nitro supplies its native
+hybrid ref. Validated snapshots and patches accepted in that interval are
+coalesced into the latest complete snapshot, then replayed once when the host
+binds. A later snapshot prop supersedes earlier queued imperative data. The
+latest imperative refreshing override is replayed after the data snapshot;
+a newer full snapshot resets that override. A replacement native host receives
+the latest accepted state, while duplicate callbacks for the same host do not
+repeat snapshots. After unmount, late native ref, action and event callbacks
+cannot resume work; React effect cleanup/restart may restore the still-mounted
+host. Existing scroll
+commands retain their existing best-effort behavior before host readiness.
+
+### Measurement, reuse and preservation
+
+Opinion text is fully visible. Announcement spans support plain text, bold,
+italic, ticker and link actions; collapsed content is two lines and expanded
+content has no additional line cap. The expand/collapse control is always in
+layout. Measurement and drawing use the same inputs. Cache identity includes
+content, available width, fonts/font scale, locale and expansion; caches must
+be bounded. iOS caches at most 512 entries / 2 MiB. Android retains only the bound host view tree and TextView layouts, with no cross-row measurement cache; width/content/font/locale changes remeasure. Count/text changes that alter occupied geometry invalidate layout.
+Image requests preserve an unchanged effective source and clear/cancel on
+recycle. Status animations stop on detach/recycle and respect reduced motion.
+
+For SmartX vertical/linear append and content-height changes the list preserves the first
+visible stable key plus its pixel offset. If that key disappears, prefer the
+nearest surviving successor, then predecessor, clamping to content bounds.
+This is tied to actual snapshot/layout changes, not an abnormal-viewport
+recovery loop. Explicit consumer scrolling retains authority; data refresh
+and selection still request top through the App's existing scheduler.
+
+### Scroll metrics extension
+
+An optional `onScrollMetrics` callback reports a finite JSON payload containing
+`phase` (`scroll`, `beginDrag`, `endDrag`, `beginMomentum`, `endMomentum`, or
+`geometry`), `offsetX`, `offsetY`, `contentWidth`, `contentHeight`, `viewportWidth`
+and `viewportHeight`. Native offsets are absolute content coordinates including
+container slots. Android content extent for not-yet-measured variable-height rows uses the existing RecyclerView estimate; observed visible offset is authoritative for top confirmation, while full-content geometry is not an exact measurement until laid out. Scroll frames are emitted at most once per 16 ms; initial
+geometry, geometry changes and terminal drag/momentum events are never dropped.
+Disabled callbacks incur no JSON serialization. iOS and Android emit balanced
+interaction phases and final observed geometry; no command return is a promise
+that scrolling has reached its destination. Unmount cancels deferred events.
+
+### Acceptance
+
+Required checks cover strict data/patch validation, current action binding,
+same-key full rebind, recycling/images, multibyte text, font scale and locale,
+announcement expand/collapse, actual scrolling events, append/height anchors,
+refresh interruption and existing-template compatibility. TS/unit checks do
+not prove rendered parity. Both native platforms require development builds
+and target-path checks; performance uses the App's fixed 500-row Release
+comparison, cold/warm images, three runs and explicit frame/memory metrics.
+Default App rollout remains gated on that evidence.
+
+### Font resource ownership
+
+The fork selectively adopts upstream 5e94f3bd057ca054ae14153e1fa893d3ae1d0eb5
+(remove bundled Roobert fonts and provide NativeList's MIT license), while retaining
+f11ac08bf1278a31345829d9e245015d52035df4 as its base. NativeList does not
+distribute or register third-party font files. Legacy templates use weighted system
+UIFont on iOS, the existing sans-serif/sans-serif-medium Android fallback and the
+Web system stack. SmartX templates use the explicit App-supplied IBM Plex Sans
+font names; their font resources remain owned and licensed by the App. Font metrics
+are included in the native validation scope.
+
+### Candidate audit (2026-10-11)
+
+The post-change implementation review required explicit host-readiness replay and
+late-event disposal, native-only Web rejection, optional retry button identifiers,
+bounded measurement caches, and Android estimated unmeasured content extent; the
+sections above now record those actual contracts. SmartX separators start at 52px;
+announcement separators retain a 16px trailing inset, while feed separators reach
+the trailing edge. Like counts and already-formatted extra counts remain strings.
+
+At this candidate, package Jest passes 251 tests, four-package Bob/Nitrogen builds
+pass, SwiftPM geometry passes 11 tests, and isolated UIKit presentation passes 9
+tests. The UIKit host replaces the OneKeyImage slot and does not prove the full
+Nitro/Image linkage. Android pure geometry/anchor/image-lifecycle checks pass 16
+tests in total. These are bounded checks: App Debug/Release builds, live image
+requests, real-device behavior and the three-run performance comparison remain
+in the App integration acceptance record. No default renderer switch follows
+from these isolated results.

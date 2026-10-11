@@ -1,3 +1,4 @@
+import { assertSmartXContent, assertSmartXPatch } from './SmartX.validation';
 import { ROW_BOX_STYLE_KEYS_BY_TYPE } from './models';
 import type {
   ActivityRow,
@@ -186,6 +187,10 @@ const TEXT_STYLE_KEYS_BY_ROW_TYPE: Readonly<
   sectionHeader: ['title', 'subtitle', 'value'],
   action: ['title', 'value'],
   system: ['title', 'message', 'actionText'],
+  smartxOpinion: [],
+  smartxTrade: [],
+  smartxMilestone: [],
+  smartxAnnouncement: [],
 };
 
 const EXTRA_STYLE_KEYS_BY_ROW_TYPE: Readonly<
@@ -1078,6 +1083,14 @@ function assertRow(
   assertVisual(row, path);
 
   switch (row.type) {
+    case 'smartxOpinion':
+    case 'smartxTrade':
+    case 'smartxMilestone':
+    case 'smartxAnnouncement':
+      if (row.style !== undefined)
+        fail(`${path}.style`, 'SmartX uses named theme and content slots');
+      assertSmartXContent(row.type, row.smartx, `${path}.smartx`);
+      break;
     case 'walletGroup':
       assertWalletGroup(row, path);
       break;
@@ -1335,6 +1348,11 @@ function assertRow(
         (row.height < 0 || row.height > MAX_SPACER_HEIGHT)
       ) {
         fail(`${path}.height`, `must be within 0...${MAX_SPACER_HEIGHT}`);
+      }
+      if ('actionTestID' in row && row.actionTestID !== undefined) {
+        if (row.variant !== 'retry')
+          fail(`${path}.actionTestID`, 'is only supported by retry rows');
+        assertKey(row.actionTestID as string, `${path}.actionTestID`);
       }
       if (row.variant === 'retry') {
         assertKey(row.actionKey, `${path}.actionKey`);
@@ -1607,6 +1625,12 @@ function assertPatchChanges(patch: RowPatch, index: number): void {
   }
 
   switch (patch.type) {
+    case 'smartxOpinion':
+    case 'smartxTrade':
+    case 'smartxMilestone':
+    case 'smartxAnnouncement':
+      assertSmartXPatch(patch.type, patch.changes, path);
+      break;
     case 'identity':
       assertText(patch.changes.title, `${path}.title`);
       assertText(patch.changes.subtitle, `${path}.subtitle`);
@@ -1788,6 +1812,8 @@ function assertPatchChanges(patch: RowPatch, index: number): void {
       break;
     case 'system':
       assertText(patch.changes.message, `${path}.message`);
+      if (patch.changes.actionTestID !== undefined)
+        assertKey(patch.changes.actionTestID, `${path}.actionTestID`);
       break;
     default:
       fail(`patches[${index}].type`, 'is not supported');

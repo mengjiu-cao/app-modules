@@ -324,8 +324,7 @@ internal class NativeListSystemRowView(context: ThemedReactContext) :
         if (variant == "retry") {
           text(
             action,
-            // Legacy: only the market retry reads actionText; this label is fixed.
-            "Retry",
+            data.optString("actionText", "Retry"),
             "actionText",
             14f,
             "medium",
@@ -337,6 +336,17 @@ internal class NativeListSystemRowView(context: ThemedReactContext) :
           action.background = fill(color(theme, "strongBackground", "#0000000F"), 16)
           action.setPadding(dp(10), dp(4), dp(10), dp(4))
           addView(action, wrap().apply { marginStart = dp(12) })
+        }
+      }
+    }
+    val actionTestID = data.optString("actionTestID").takeIf(String::isNotEmpty)
+    action.setTag(com.facebook.react.R.id.react_test_id, actionTestID)
+    action.accessibilityDelegate = actionTestID?.let { testID ->
+      object : View.AccessibilityDelegate() {
+        override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) {
+          super.onInitializeAccessibilityNodeInfo(host, info)
+          info.viewIdResourceName = testID
+          info.className = "android.widget.Button"
         }
       }
     }
@@ -373,6 +383,8 @@ internal class NativeListSystemRowView(context: ThemedReactContext) :
     action.background = null
     action.setPadding(0, 0, 0, 0)
     action.setOnClickListener(null)
+    action.setTag(com.facebook.react.R.id.react_test_id, null)
+    action.accessibilityDelegate = null
   }
 
   override fun disposeContent() = recycleContent()

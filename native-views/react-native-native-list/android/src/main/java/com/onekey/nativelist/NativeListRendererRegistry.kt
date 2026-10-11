@@ -17,6 +17,10 @@ internal object NativeListRendererRegistry {
       NativeListRendererKey.ACTIVITY to ::NativeListActivityRowView,
       NativeListRendererKey.SYSTEM to ::NativeListSystemRowView,
       NativeListRendererKey.ACTION to ::NativeListActionRowView,
+      NativeListRendererKey.SMARTX_OPINION to ::NativeListSmartXRowView,
+      NativeListRendererKey.SMARTX_TRADE to ::NativeListSmartXRowView,
+      NativeListRendererKey.SMARTX_MILESTONE to ::NativeListSmartXRowView,
+      NativeListRendererKey.SMARTX_ANNOUNCEMENT to ::NativeListSmartXRowView,
     )
 
   private val keys =
@@ -33,6 +37,10 @@ internal object NativeListRendererRegistry {
       "activity" to NativeListRendererKey.ACTIVITY,
       "system" to NativeListRendererKey.SYSTEM,
       "action" to NativeListRendererKey.ACTION,
+      "smartxOpinion" to NativeListRendererKey.SMARTX_OPINION,
+      "smartxTrade" to NativeListRendererKey.SMARTX_TRADE,
+      "smartxMilestone" to NativeListRendererKey.SMARTX_MILESTONE,
+      "smartxAnnouncement" to NativeListRendererKey.SMARTX_ANNOUNCEMENT,
     )
 
   fun key(type: String) = keys.getValue(type)

@@ -3716,6 +3716,7 @@ __metadata:
     "@eslint/js": "npm:^9.35.0"
     "@react-native/babel-preset": "npm:0.86.2"
     "@react-native/eslint-config": "npm:0.86.2"
+    "@react-native/jest-preset": "npm:0.86.2"
     "@types/jest": "npm:^29.5.14"
     "@types/react": "npm:^19.2.0"
     del-cli: "npm:^6.0.0"

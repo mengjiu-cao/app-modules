@@ -5,6 +5,7 @@ export type {
   NativeListKeyboardShouldPersistTaps,
   NativeListProps,
   NativeListRef,
+  NativeListScrollMetricsEvent,
   ScrollAlignment,
   ScrollPositionOptions,
   ScrollToEndParams,
@@ -16,6 +17,7 @@ export type {
   ScrollToOffsetParams,
 } from './NativeList';
 export type * from './models';
+export type * from './SmartX.models';
 export {
   applyRowPatches,
   serializePatches,
