@@ -731,7 +731,7 @@ italic, ticker and link actions; collapsed content is two lines and expanded
 content has no additional line cap. The expand/collapse control is always in
 layout. Measurement and drawing use the same inputs. Cache identity includes
 content, available width, fonts/font scale, locale and expansion; caches must
-be bounded. iOS caches at most 512 entries / 2 MiB. Android retains only the bound host view tree and TextView layouts, with no cross-row measurement cache; width/content/font/locale changes remeasure. Count/text changes that alter occupied geometry invalidate layout.
+be bounded. SmartX mirrors the App ThemedText policy: plain-string CJK content adds 2px line height without increasing font size; RichText, array children and Trans fragments retain their original line height. Layout containers use those same line boxes. The App currently supplies fontScale 1 to preserve its allowFontScaling=false behavior; other consumers may explicitly scale. iOS caches at most 512 entries / 2 MiB. Android retains only the bound host view tree and TextView layouts, with no cross-row measurement cache; width/content/font/locale changes remeasure. Count/text changes that alter occupied geometry invalidate layout.
 Image requests preserve an unchanged effective source and clear/cancel on
 recycle. Status animations stop on detach/recycle and respect reduced motion.
 
@@ -793,3 +793,5 @@ tests in total. These are bounded checks: App Debug/Release builds, live image
 requests, real-device behavior and the three-run performance comparison remain
 in the App integration acceptance record. No default renderer switch follows
 from these isolated results.
+
+CJK follow-up: affected UIKit presentation checks pass 10 tests (8 preserved + 2 new); the unchanged system renderer check remains valid. Android adds 3 passing typography checks. These checks still do not replace App rendering or performance acceptance.

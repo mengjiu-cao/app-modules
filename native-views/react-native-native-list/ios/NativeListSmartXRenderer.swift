@@ -101,13 +101,24 @@ enum NativeListSmartXRenderer {
       guard italic, let descriptor = font.fontDescriptor.withSymbolicTraits(.traitItalic) else { return font }
       return UIFont(descriptor: descriptor, size: font.pointSize)
     }
-    func value(_ text: String, size: CGFloat = 14, weight: String = "medium", tone: UIColor? = nil, line: CGFloat = 20) -> NSAttributedString {
+    /// Mirrors ThemedText's withCjkLineHeight only for a string child. RichText,
+    /// array children and Trans keep their explicit line height in the App.
+    func value(_ text: String, size: CGFloat = 14, weight: String = "medium", tone: UIColor? = nil, line: CGFloat = 20, stringChild: Bool = true) -> NSAttributedString {
+      let hasCJK = stringChild && text.unicodeScalars.contains { scalar in
+        (0x2E80...0x9FFF).contains(scalar.value) || (0xF900...0xFAFF).contains(scalar.value)
+          || (0x3000...0x303F).contains(scalar.value) || (0xFF00...0xFFEF).contains(scalar.value)
+      }
+      let lineHeight = (line + (hasCJK ? 2 : 0)) * scale
       let paragraph = NSMutableParagraphStyle()
-      paragraph.minimumLineHeight = line * scale
-      paragraph.maximumLineHeight = line * scale
+      paragraph.minimumLineHeight = lineHeight
+      paragraph.maximumLineHeight = lineHeight
       paragraph.lineBreakMode = .byWordWrapping
       let resolved = font(size, weight)
-      return NSAttributedString(string: text, attributes: [.font: resolved, .foregroundColor: tone ?? color("text"), .paragraphStyle: paragraph, .baselineOffset: (line * scale - resolved.lineHeight) / 2])
+      return NSAttributedString(string: text, attributes: [.font: resolved, .foregroundColor: tone ?? color("text"), .paragraphStyle: paragraph, .baselineOffset: (lineHeight - resolved.lineHeight) / 2])
+    }
+    func lineHeight(_ text: NSAttributedString) -> CGFloat {
+      guard text.length > 0 else { return 0 }
+      return (text.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)?.maximumLineHeight ?? 0
     }
     func extent(_ text: NSAttributedString, width: CGFloat, lines: Int = 0) -> CGSize {
       guard text.length > 0 else { return .zero }
@@ -146,13 +157,12 @@ enum NativeListSmartXRenderer {
       let string = value(tag.string("text"), size: 12, tone: Self.parseColor(tag.string("color")), line: 18)
       let w = extent(string, width: width, lines: 1).width + 12
       boxes["tag"] = Box(frame: CGRect(x: x, y: y, width: w, height: 20), fill: Self.parseColor(tag.string("backgroundColor")), border: .clear, radius: 6, testID: tag.string("testID"))
-      text("tagText", string, x: x + 6, y: y + (20 - 18 * scale) / 2, width: w - 12, lines: 1)
+      text("tagText", string, x: x + 6, y: y + (20 - lineHeight(string)) / 2, width: w - 12, lines: 1)
       return w
     }
     mutating func author(opinion: Bool) -> CGFloat {
       let author = data.dictionary("author") ?? [:]
       let hasHandle = opinion && !author.string("handle").isEmpty
-      let headH = max(opinion && !hasHandle ? 28 : 20, 20 * scale)
       image("avatar", uri: author.string("avatarUri"), CGRect(x: 16, y: 16, width: 28, height: 28), radius: 14, fallbackURI: assets.string("defaultAvatarUri"))
       action(author.dictionary("avatarAction"), CGRect(x: 16, y: 16, width: 28, height: 28), ["avatar"])
       let time = value(author.string("time"), size: 12, weight: "regular", tone: color("secondaryText"), line: 18)
@@ -162,12 +172,13 @@ enum NativeListSmartXRenderer {
       let more = data.dictionary("moreAction")
       let available = max(1, width - 68 - (more == nil ? 0 : 28))
       let name = value(author.string("name"))
+      let headH = max(opinion && !hasHandle ? 28 : 20, lineHeight(name), lineHeight(time))
       let nameW = min(extent(name, width: available, lines: 1).width, max(1, available - timeW - (timeW > 0 ? 4 : 0) - (tagW > 0 ? tagW + 4 : 0)))
-      let nameFrame = text("author", name, x: 52, y: 16 + (headH - 20 * scale) / 2, width: nameW, lines: 1)
+      let nameFrame = text("author", name, x: 52, y: 16 + (headH - lineHeight(name)) / 2, width: nameW, lines: 1)
       action(author.dictionary("nameAction"), nameFrame, ["author"])
       var x = 52 + nameW
       if let tagData { x += 4; x += tag(tagData, x: x, y: 16 + (headH - 20) / 2) }
-      if timeW > 0 { text("time", time, x: x + 4, y: 16 + (headH - 18 * scale) / 2, width: timeW, lines: 1) }
+      if timeW > 0 { text("time", time, x: x + 4, y: 16 + (headH - lineHeight(time)) / 2, width: timeW, lines: 1) }
       if more != nil {
         let frame = CGRect(x: width - 36, y: 16 + (headH - 20) / 2, width: 20, height: 20)
         asset("more", "moreUri", CGRect(x: frame.minX + 2, y: frame.minY + 8.22, width: 16, height: 3.55556))
@@ -176,7 +187,7 @@ enum NativeListSmartXRenderer {
       var bottom = 16 + headH
       if hasHandle {
         let handle = author.string("handle")
-        bottom = text("handle", value(handle.hasPrefix("@") ? handle : "@" + handle, size: 12, tone: color("secondaryText"), line: 18), x: 52, y: bottom + 2, width: width - 68, lines: 1).maxY
+        bottom = text("handle", value(handle.hasPrefix("@") ? handle : "@" + handle, size: 12, tone: color("secondaryText"), line: 18, stringChild: false), x: 52, y: bottom + 2, width: width - 68, lines: 1).maxY
       }
       return bottom
     }
@@ -184,9 +195,9 @@ enum NativeListSmartXRenderer {
       let count = value(like.string("count"), size: 12, tone: color("secondaryText"), line: 18)
       let gap: CGFloat = announcement ? 8 : 5
       let w = max(34, 20 + gap + extent(count, width: width, lines: 1).width + (announcement ? 8 : 0))
-      let h = max(announcement ? 28 : 32, 18 * scale)
+      let h = max(announcement ? 28 : 32, lineHeight(count))
       asset("likeIcon", like.bool("liked") ? "likeFilledUri" : "likeUri", CGRect(x: x, y: y + (h - 20) / 2, width: 20, height: 20))
-      text("likeCount", count, x: x + 20 + gap, y: y + (h - 18 * scale) / 2, width: max(1, w - 20 - gap), lines: 1)
+      text("likeCount", count, x: x + 20 + gap, y: y + (h - lineHeight(count)) / 2, width: max(1, w - 20 - gap), lines: 1)
       let frame = CGRect(x: x, y: y, width: w, height: h)
       action(like.dictionary("action"), frame, ["likeIcon", "likeCount"])
       return frame
@@ -205,7 +216,7 @@ enum NativeListSmartXRenderer {
       for (i, link) in links.enumerated() {
         let label = value(link.string("label"), size: 12, tone: color("secondaryText"), line: 18)
         let w = min(max(1, width - 68), extent(label, width: width, lines: 1).width + 60)
-        let h = max(20, 18 * scale + 4)
+        let h = max(20, lineHeight(label) + 4)
         if cursor + w > width - 16 { cursor = 52; rowY += rowH + 8; rowH = 0 }
         // React's space-between places the last fitting link at the trailing edge.
         if i == links.count - 1 { cursor = max(cursor, width - 16 - w) }
@@ -213,7 +224,7 @@ enum NativeListSmartXRenderer {
         let frame = CGRect(x: cursor, y: rowY + max(0, (rowH - h) / 2), width: w, height: h)
         boxes[id] = Box(frame: frame, fill: color("subtleFill"), border: color("border"), radius: 8)
         asset(id + "X", "xUri", CGRect(x: frame.minX + 10, y: frame.midY - 8, width: 16, height: 16))
-        text(id + "Text", label, x: frame.minX + 30, y: frame.midY - 9 * scale, width: max(1, w - 60), lines: 1)
+        text(id + "Text", label, x: frame.minX + 30, y: frame.midY - lineHeight(label) / 2, width: max(1, w - 60), lines: 1)
         asset(id + "Arrow", "arrowUpRightUri", CGRect(x: frame.maxX - 26, y: frame.midY - 8, width: 16, height: 16))
         action(link.dictionary("action"), frame, [id, id + "X", id + "Text", id + "Arrow"])
         cursor += w + 8; rowH = max(rowH, h)
@@ -230,7 +241,7 @@ enum NativeListSmartXRenderer {
         }
         if !followed.dictionaries("avatars").isEmpty { x += 6 }
         if !followed.string("extraCount").isEmpty {
-          let extra = value(followed.string("extraCount"), size: 12, tone: color("secondaryText"), line: 18)
+          let extra = value(followed.string("extraCount"), size: 12, tone: color("secondaryText"), line: 18, stringChild: false)
           let w = max(20, extent(extra, width: width, lines: 1).width + 8)
           x += 4
           boxes["followedExtra"] = Box(frame: CGRect(x: x, y: top, width: w, height: 20), fill: color("subtleFill"), border: .clear, radius: 10)
@@ -238,7 +249,7 @@ enum NativeListSmartXRenderer {
           x += w
         }
         let runs = NSMutableAttributedString(string: "")
-        for run in followed.dictionaries("text") { runs.append(value(run.string("text"), size: 12, tone: Self.parseColor(run.string("color")), line: 18)) }
+        for run in followed.dictionaries("text") { runs.append(value(run.string("text"), size: 12, tone: Self.parseColor(run.string("color")), line: 18, stringChild: false)) }
         let h = max(20, 18 * scale)
         text("followedText", runs, x: x + 8, y: top + (h - 18 * scale) / 2, width: width - 24 - x, lines: 1)
         action(followed.dictionary("action"), CGRect(x: 52, y: top, width: width - 68, height: h), Array(texts.keys.filter { $0.hasPrefix("followed") }) + Array(images.keys.filter { $0.hasPrefix("followed") }))
@@ -248,32 +259,37 @@ enum NativeListSmartXRenderer {
     }
     mutating func opinionPosition(_ position: [String: Any], y: CGFloat) -> CGFloat {
       let x: CGFloat = 52, w = max(1, width - 68)
-      let h = max(64, 18 + 40 * scale)
+      let kicker = value(position.string("cycleLabel"), size: 12, tone: color("secondaryText"), line: 18)
+      let symbol = value(position.dictionary("token")?.string("symbol") ?? "")
+      let identityH = lineHeight(kicker) + (symbol.length > 0 ? 2 + lineHeight(symbol) : 0)
+      let primary = position.dictionary("primary")
+      let secondary = primary == nil ? nil : position.dictionary("secondary")
+      let p = value(primary?.string("text") ?? "", tone: Self.parseColor(primary?.string("color") ?? ""))
+      let secondaryText = value(secondary?.string("text") ?? "", size: 12, tone: Self.parseColor(secondary?.string("color") ?? ""), line: 18)
+      let valuesH = lineHeight(p) + lineHeight(secondaryText)
+      let h = max(64, 18 + max(36, identityH, valuesH))
       let frame = CGRect(x: x, y: y, width: w, height: h)
       card("position", frame, testID: position.string("testID"))
       token(position.dictionary("token") ?? [:], id: "positionLogo", x: x + 9, y: y + (h - 36) / 2)
-      let hasPrimary = position.dictionary("primary") != nil
       let identityX = x + 53
-      let identityW = max(1, w - 62 - (hasPrimary ? 104 : 0))
-      let kicker = value(position.string("cycleLabel"), size: 12, tone: color("secondaryText"), line: 18)
+      let identityW = max(1, w - 62 - (primary == nil ? 0 : 104))
       let kickerW = min(max(1, identityW - 8), extent(kicker, width: identityW, lines: 1).width)
-      let textY = y + (h - 40 * scale) / 2
+      let textY = y + (h - identityH) / 2
       text("cycle", kicker, x: identityX, y: textY, width: kickerW, lines: 1)
-      dot = CGRect(x: identityX + kickerW + 4, y: textY + 9 * scale - 2, width: 4, height: 4)
-      text("symbol", value(position.dictionary("token")?.string("symbol") ?? ""), x: identityX, y: textY + 18 * scale + 2, width: identityW, lines: 1)
-      if let primary = position.dictionary("primary") {
+      dot = CGRect(x: identityX + kickerW + 4, y: textY + lineHeight(kicker) / 2 - 2, width: 4, height: 4)
+      if symbol.length > 0 {
+        text("symbol", symbol, x: identityX, y: textY + lineHeight(kicker) + 2, width: identityW, lines: 1)
+      }
+      if primary != nil {
         let valueX = x + w - 105
-        let p = value(primary.string("text"), tone: Self.parseColor(primary.string("color")))
         let pW = min(96, extent(p, width: 96, lines: 1).width)
-        let hasSecondary = position.dictionary("secondary") != nil
-        let top = y + (h - (hasSecondary ? 38 : 20) * scale) / 2
+        let top = y + (h - valuesH) / 2
         text("primary", p, x: valueX + 96 - pW, y: top, width: pW, lines: 1)
-        if let secondary = position.dictionary("secondary") {
-          let s = value(secondary.string("text"), size: 12, tone: Self.parseColor(secondary.string("color")), line: 18)
+        if let secondary {
           let direction = secondary.string("direction")
-          let sW = min(direction.isEmpty ? 96 : 84, extent(s, width: 96, lines: 1).width)
-          text("secondary", s, x: valueX + 96 - sW, y: top + 20 * scale, width: sW, lines: 1)
-          if !direction.isEmpty { asset("direction", direction == "up" ? "changeUpUri" : "changeDownUri", CGRect(x: valueX + 84 - sW, y: top + 20 * scale + (18 * scale - 16) / 2, width: 12, height: 16)) }
+          let sW = min(direction.isEmpty ? 96 : 84, extent(secondaryText, width: 96, lines: 1).width)
+          text("secondary", secondaryText, x: valueX + 96 - sW, y: top + lineHeight(p), width: sW, lines: 1)
+          if !direction.isEmpty { asset("direction", direction == "up" ? "changeUpUri" : "changeDownUri", CGRect(x: valueX + 84 - sW, y: top + lineHeight(p) + (lineHeight(secondaryText) - 16) / 2, width: 12, height: 16)) }
         }
       }
       action(position.dictionary("action"), frame, ["position", "positionLogo", "cycle", "symbol", "primary", "secondary", "direction"])
@@ -284,10 +300,10 @@ enum NativeListSmartXRenderer {
       let tokenData = data.dictionary("token") ?? [:]
       let h = max(40, 20 * scale)
       token(tokenData, id: "token", x: 52, y: y + (h - 36) / 2)
-      let string = NSMutableAttributedString(attributedString: value(tokenData.string("symbol") + (data.string("amount").isEmpty ? "" : " " + data.string("amount"))))
-      string.append(value(" at", tone: color("secondaryText")))
-      string.append(value(" " + data.string("marketCap")))
-      string.append(value(" MC", tone: color("secondaryText")))
+      let string = NSMutableAttributedString(attributedString: value(tokenData.string("symbol") + (data.string("amount").isEmpty ? "" : " " + data.string("amount")), stringChild: false))
+      string.append(value(" at", tone: color("secondaryText"), stringChild: false))
+      string.append(value(" " + data.string("marketCap"), stringChild: false))
+      string.append(value(" MC", tone: color("secondaryText"), stringChild: false))
       text("tradeText", string, x: 96, y: y + (h - 20 * scale) / 2, width: width - 112, lines: 1)
       action(data.dictionary("tokenAction"), CGRect(x: 52, y: y, width: width - 68, height: h), ["token", "tradeText"])
       action(data.dictionary("logoAction"), CGRect(x: 48, y: y + (h - 36) / 2 - 4, width: 44, height: 44), ["token"])
@@ -299,36 +315,40 @@ enum NativeListSmartXRenderer {
       for (i, threshold) in thresholds.enumerated() {
         let string = NSMutableAttributedString(string: "")
         if i > 0 { string.append(value(" · ", tone: color("secondaryText"))) }
-        string.append(value(threshold))
+        string.append(value(threshold, stringChild: false))
         bottom = text("threshold\(i)", string, x: 52, y: bottom, width: width - 68).maxY + (i < thresholds.count - 1 ? 2 : 0)
       }
       if let position = data.dictionary("position") {
         let top = bottom + 8
-        token(position.dictionary("token") ?? [:], id: "positionLogo", x: 61, y: top + 9)
         let badge = position.string("mockText")
-        let badgeW = badge.isEmpty ? 0 : extent(value(badge, size: 12, line: 18), width: width, lines: 1).width + 14
-        text("symbol", value(position.dictionary("token")?.string("symbol") ?? ""), x: 105, y: top + 9 + (36 - 20 * scale) / 2, width: width - 130 - badgeW, lines: 1)
+        let badgeText = value(badge, size: 12, tone: color("secondaryText"), line: 18)
+        let badgeW = badge.isEmpty ? 0 : extent(badgeText, width: width, lines: 1).width + 14
+        let symbol = value(position.dictionary("token")?.string("symbol") ?? "")
+        let identityH = max(36, lineHeight(symbol), badgeW > 0 ? lineHeight(badgeText) + 6 : 0)
+        text("symbol", symbol, x: 105, y: top + 9 + (identityH - lineHeight(symbol)) / 2, width: width - 130 - badgeW, lines: 1)
         if badgeW > 0 {
-          let bx = width - 25 - badgeW, bh = 18 * scale + 6
-          boxes["mock"] = Box(frame: CGRect(x: bx, y: top + 27 - bh / 2, width: badgeW, height: bh), fill: .clear, border: color("border"), radius: 6)
-          text("mockText", value(badge, size: 12, tone: color("secondaryText"), line: 18), x: bx + 7, y: top + 27 - 9 * scale, width: badgeW - 14, lines: 1)
+          let bx = width - 25 - badgeW, bh = lineHeight(badgeText) + 6
+          boxes["mock"] = Box(frame: CGRect(x: bx, y: top + 9 + (identityH - bh) / 2, width: badgeW, height: bh), fill: .clear, border: color("border"), radius: 6)
+          text("mockText", badgeText, x: bx + 7, y: top + 9 + (identityH - lineHeight(badgeText)) / 2, width: badgeW - 14, lines: 1)
         }
-        bottom = top + 9 + max(36, 20 * scale) + 8
+        // The token remains centered when scaled/localized identity text is taller.
+        token(position.dictionary("token") ?? [:], id: "positionLogo", x: 61, y: top + 9 + (identityH - 36) / 2)
+        bottom = top + 9 + identityH + 8
         let values = position.dictionaries("values")
         for (i, row) in values.enumerated() {
           let string = value(row.string("text"), weight: "semibold", tone: Self.parseColor(row.string("color")))
           let available = max(1, width - 86)
           let valueW = min(available * 0.6, extent(string, width: available, lines: 1).width)
-          let label = value(row.string("label"), size: 12, tone: color("secondaryText"), line: 18)
+          let label = value(row.string("label"), size: 12, tone: color("secondaryText"), line: 18, stringChild: false)
           let labelW = max(1, available - valueW - 12)
-          let rowH = max(20 * scale, extent(label, width: labelW).height)
+          let rowH = max(lineHeight(string), extent(label, width: labelW).height)
           text("valueLabel\(i)", label, x: 61, y: bottom + (rowH - extent(label, width: labelW).height) / 2, width: labelW)
-          text("value\(i)", string, x: width - 25 - valueW, y: bottom + (rowH - 20 * scale) / 2, width: valueW, lines: 1)
+          text("value\(i)", string, x: width - 25 - valueW, y: bottom + (rowH - lineHeight(string)) / 2, width: valueW, lines: 1)
           bottom += rowH + (i < values.count - 1 ? 4 : 0)
         }
         if !position.string("staleText").isEmpty {
           let stale = NSMutableAttributedString(attributedString: value(position.string("staleText"), size: 12, tone: color("secondaryText"), line: 18))
-          let p = NSMutableParagraphStyle(); p.alignment = .right; p.minimumLineHeight = 18 * scale; p.maximumLineHeight = 18 * scale
+          let p = NSMutableParagraphStyle(); p.alignment = .right; p.minimumLineHeight = lineHeight(stale); p.maximumLineHeight = lineHeight(stale)
           stale.addAttribute(.paragraphStyle, value: p, range: NSRange(location: 0, length: stale.length))
           bottom = text("stale", stale, x: 61, y: bottom + 4, width: width - 86).maxY
         }
@@ -341,32 +361,33 @@ enum NativeListSmartXRenderer {
     }
     mutating func announcement() {
       let author = data.dictionary("author") ?? [:]
-      image("avatar", uri: author.string("avatarUri"), CGRect(x: 16, y: 12, width: 28, height: 28), radius: 14, fallbackURI: assets.string("defaultAvatarUri"))
       let pinned = value(data.string("pinnedLabel"), size: 12, tone: color("secondaryText"), line: 18)
       let pinnedW = extent(pinned, width: width, lines: 1).width + 14
       let time = value(author.string("time"), size: 12, tone: color("secondaryText"), line: 18)
       let timeW = extent(time, width: width, lines: 1).width
       let name = value(author.string("name"), size: 16, weight: "semibold", line: 24)
-      let headH = max(28, 24 * scale)
+      let headH = max(28, lineHeight(name), lineHeight(time), lineHeight(pinned))
+      image("avatar", uri: author.string("avatarUri"), CGRect(x: 16, y: 12 + (headH - 28) / 2, width: 28, height: 28), radius: 14, fallbackURI: assets.string("defaultAvatarUri"))
       let nameW = min(extent(name, width: width, lines: 1).width, max(1, width - 52 - 28 - 16 - pinnedW - timeW - 6 - (data.bool("verified") ? 16 : 0)))
-      text("author", name, x: 52, y: 12 + (headH - 24 * scale) / 2, width: nameW, lines: 1)
+      text("author", name, x: 52, y: 12 + (headH - lineHeight(name)) / 2, width: nameW, lines: 1)
       var x = 52 + nameW
       if data.bool("verified") {
         asset("verified", "announcementBadgeUri", CGRect(x: x + 5.5, y: 12 + (headH - 12) / 2 + 1.5, width: 10.5, height: 10.5)); x += 16
       }
-      text("time", time, x: x + 6, y: 12 + (headH - 18 * scale) / 2, width: timeW, lines: 1)
+      text("time", time, x: x + 6, y: 12 + (headH - lineHeight(time)) / 2, width: timeW, lines: 1)
       asset("pinnedIcon", "announcementPinnedUri", CGRect(x: width - 28 - pinnedW, y: 12 + (headH - 12) / 2, width: 12, height: 12))
-      text("pinnedLabel", pinned, x: width - 28 - pinnedW + 14, y: 12 + (headH - 18 * scale) / 2, width: pinnedW - 14, lines: 1)
+      text("pinnedLabel", pinned, x: width - 28 - pinnedW + 14, y: 12 + (headH - lineHeight(pinned)) / 2, width: pinnedW - 14, lines: 1)
       let cardY = 12 + headH + 4
       var y = cardY + 12
       if !data.string("title").isEmpty {
-        asset("titleIcon", "announcementTitleUri", CGRect(x: 66, y: y + (20 * scale - 16) / 2, width: 16, height: 16))
-        y = text("title", value(data.string("title")), x: 88, y: y, width: width - 130, lines: 1).maxY + 8
+        let title = value(data.string("title"))
+        asset("titleIcon", "announcementTitleUri", CGRect(x: 66, y: y + (lineHeight(title) - 16) / 2, width: 16, height: 16))
+        y = text("title", title, x: 88, y: y, width: width - 130, lines: 1).maxY + 8
       }
       let rich = NSMutableAttributedString(string: "")
       var inlineActions: [String: [String: Any]] = [:]
       for (i, span) in data.dictionaries("spans").enumerated() {
-        let run = NSMutableAttributedString(attributedString: value(span.string("text"), weight: span.bool("bold") ? "bold" : "regular", tone: span.string("kind") == "text" ? color("text") : color("primary")))
+        let run = NSMutableAttributedString(attributedString: value(span.string("text"), weight: span.bool("bold") ? "bold" : "regular", tone: span.string("kind") == "text" ? color("text") : color("primary"), stringChild: false))
         let range = NSRange(location: 0, length: run.length)
         run.addAttribute(.font, value: font(14, span.bool("bold") ? "bold" : "regular", italic: span.bool("italic")), range: range)
         if span.string("kind") == "link" { run.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: range) }
@@ -380,7 +401,7 @@ enum NativeListSmartXRenderer {
       texts["announcementBody"]?.actions = inlineActions
       y = body.maxY + 12
       let toggle = value(data.string("toggleLabel"), size: 12, tone: color("primary"), line: 18)
-      let toggleH = max(20, 18 * scale)
+      let toggleH = max(20, lineHeight(toggle))
       let toggleFrame = text("toggle", toggle, x: 64, y: y, width: min(width - 104, extent(toggle, width: width, lines: 1).width), lines: 1, height: toggleH)
       action(data.dictionary("toggleAction"), toggleFrame.insetBy(dx: -8, dy: -8), ["toggle"])
       y += toggleH + 12
