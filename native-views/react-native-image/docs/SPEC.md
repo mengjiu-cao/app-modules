@@ -308,5 +308,21 @@ annotations. View implementations continue to use their existing retention
 annotations. This does not change cache behavior or disable shrinking for other
 image classes. Acceptance requires checking the minified Release DEX for the
 implementation and starting the consumer App with image-cache initialization;
-Debug startup alone is insufficient. Status: retention rule implemented;
-minified startup verification pending.
+Debug startup alone is insufficient. Status: minified SmartX Android Release
+startup and the DEX class/constructor/API retention were verified with the
+`b8d6185b76e73cd7e6e1484de165b3147733ef2b` distribution.
+
+### Android bundled drawable identifiers (2026-10-11)
+
+React Native's packaged Android bundle resolves static image assets to bare
+drawable identifiers, whereas Metro resolves them to URLs. The local image
+loader MUST resolve a bare Android resource name against the consumer Context's
+package and drawable resources. Only a positive resource lookup may replace it
+with an `android.resource` URI. Empty, unknown, or non-resource names and
+HTTP(S), file, content, data, or existing resource URIs keep their current paths.
+The resolved URI must be shared by the Glide delegate and encoded-byte safety
+checks; cancellation and size limits remain unchanged. No package name is
+hardcoded. Focused resolver tests cover lookup and bypass behavior. Acceptance
+requires the same bundled avatar/placeholder to render in minified Release.
+Status: resolver implemented and three JVM checks pass; Release image
+verification pending.

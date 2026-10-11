@@ -933,7 +933,15 @@ private class OneKeyImageLocalModelLoader(
   private val context: Context,
   private val delegate: ModelLoader<Uri, InputStream>,
 ) : ModelLoader<OneKeyImageLocalModel, InputStream> {
-  override fun handles(model: OneKeyImageLocalModel): Boolean = delegate.handles(model.uri)
+  private fun resolvedUri(model: OneKeyImageLocalModel): Uri {
+    val source = model.uri.toString()
+    val resolved = OneKeyImageAndroidResourceUri.resolve(source, context.packageName) { name, packageName ->
+      context.resources.getIdentifier(name, "drawable", packageName)
+    }
+    return if (resolved == source) model.uri else Uri.parse(resolved)
+  }
+
+  override fun handles(model: OneKeyImageLocalModel): Boolean = delegate.handles(resolvedUri(model))
 
   override fun buildLoadData(
     model: OneKeyImageLocalModel,
@@ -941,11 +949,12 @@ private class OneKeyImageLocalModelLoader(
     height: Int,
     options: Options,
   ): ModelLoader.LoadData<InputStream>? {
-    val loadData = delegate.buildLoadData(model.uri, width, height, options) ?: return null
+    val uri = resolvedUri(model)
+    val loadData = delegate.buildLoadData(uri, width, height, options) ?: return null
     return ModelLoader.LoadData(
       OneKeyImageSafetyVersionedKey(loadData.sourceKey),
       loadData.alternateKeys.map(::OneKeyImageSafetyVersionedKey),
-      OneKeyLimitedLocalFetcher(context, model.uri, loadData.fetcher),
+      OneKeyLimitedLocalFetcher(context, uri, loadData.fetcher),
     )
   }
 }
