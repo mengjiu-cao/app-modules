@@ -1,0 +1,11 @@
+{
+  "uiViewClassName": "Skeleton",
+  "supportsRawText": false,
+  "bubblingEventTypes": {},
+  "directEventTypes": {},
+  "validAttributes": {
+    "shimmerSpeed": true,
+    "shimmerGradientColors": true,
+    "hybridRef": true
+  }
+}

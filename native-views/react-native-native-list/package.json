@@ -1,0 +1,60 @@
+{
+  "name": "@onekeyfe/react-native-native-list",
+  "version": "3.0.165",
+  "description": "Template-driven native RecyclerView and UICollectionView for React Native",
+  "source": "./src/index.ts",
+  "main": "./lib/module/index.js",
+  "types": "./lib/typescript/src/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./lib/typescript/src/index.d.ts",
+      "default": "./lib/module/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "lib",
+    "android",
+    "ios",
+    "cpp",
+    "nitrogen",
+    "nitro.json",
+    "docs",
+    "react-native.config.js",
+    "*.podspec",
+    "!ios/build",
+    "!android/build",
+    "!android/app/build",
+    "!**/__tests__",
+    "!**/*.map",
+    "scripts"
+  ],
+  "keywords": [
+    "react-native",
+    "ios",
+    "android",
+    "recyclerview",
+    "uicollectionview"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OneKeyHQ/app-modules.git",
+    "directory": "native-views/react-native-native-list"
+  },
+  "author": "OneKey",
+  "bugs": {
+    "url": "https://github.com/OneKeyHQ/app-modules/issues"
+  },
+  "homepage": "https://github.com/OneKeyHQ/app-modules/tree/main/native-views/react-native-native-list#readme",
+  "license": "MIT",
+  "peerDependencies": {
+    "@onekeyfe/react-native-image": "3.0.165",
+    "@onekeyfe/react-native-native-logger": "3.0.165",
+    "react": "*",
+    "react-native": "*",
+    "react-native-nitro-modules": "0.37.0"
+  }
+}

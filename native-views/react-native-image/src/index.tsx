@@ -1,0 +1,480 @@
+import {
+  createElement,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import {
+  Image,
+  Platform,
+  StyleSheet,
+  View,
+  type ImageSourcePropType,
+  type ImageURISource,
+  type ViewProps,
+} from 'react-native';
+import {
+  callback,
+  getHostComponent,
+  NitroModules,
+  type NitroViewWrappedCallback,
+} from 'react-native-nitro-modules';
+const OneKeyImageConfig = require('../nitrogen/generated/shared/json/OneKeyImageConfig.json');
+import type {
+  OneKeyImageCache as OneKeyImageCacheHybrid,
+  OneKeyImageCacheType as OneKeyImageNativeCacheType,
+  OneKeyImageMethods,
+  OneKeyImageNativeProps,
+} from './OneKeyImage.nitro';
+import {
+  OneKeyImageCachePolicy,
+  OneKeyImageContentFit,
+  OneKeyImageLoadingStrategy,
+  OneKeyImageVariant,
+} from './OneKeyImage.nitro';
+
+export {
+  OneKeyImageCachePolicy,
+  OneKeyImageContentFit,
+  OneKeyImageLoadingStrategy,
+  OneKeyImageVariant,
+};
+export type {
+  OneKeyImageMethods,
+  OneKeyImageNativeProps,
+  OneKeyImagePreloadSource,
+} from './OneKeyImage.nitro';
+
+export enum OneKeyImageCacheType {
+  NONE = 'none',
+  MEMORY = 'memory',
+  DISK = 'disk',
+}
+
+type MaybeWrappedCallback<T extends (...args: any[]) => void> =
+  | T
+  | NitroViewWrappedCallback<T>;
+
+export interface OneKeyImageSource extends ImageURISource {
+  cachePolicy?: OneKeyImageCachePolicy;
+}
+
+export interface OneKeyImagePreloadInput extends OneKeyImageSource {
+  resizeWidth?: number;
+  resizeHeight?: number;
+  pixelRatio?: number;
+  overscan?: number;
+  optimizeTos?: boolean;
+}
+
+export interface OneKeyImageLoadEvent {
+  source: {
+    url: string;
+    width: number;
+    height: number;
+  };
+  cacheType: OneKeyImageCacheType;
+}
+
+export interface OneKeyImageErrorEvent {
+  error: string;
+}
+
+export interface OneKeyImageProps
+  extends Omit<
+      OneKeyImageNativeProps,
+      | 'sourceUri'
+      | 'sourceHeadersJson'
+      | 'onLoadStart'
+      | 'onLoad'
+      | 'onDisplay'
+      | 'onError'
+      | 'onLoadEnd'
+    >,
+    ViewProps {
+  source?: OneKeyImageSource | number;
+  /** Content shown while a non-null source is loading. */
+  placeholder?: ReactNode;
+  /** Content shown when source is unavailable or fails to load. */
+  fallback?: ReactNode;
+  hybridRef?: MaybeWrappedCallback<(ref: OneKeyImageMethods) => void>;
+  onLoadStart?: MaybeWrappedCallback<() => void>;
+  onLoad?: MaybeWrappedCallback<(event: OneKeyImageLoadEvent) => void>;
+  onDisplay?: MaybeWrappedCallback<() => void>;
+  onError?: MaybeWrappedCallback<(event: OneKeyImageErrorEvent) => void>;
+  onLoadEnd?: MaybeWrappedCallback<() => void>;
+}
+
+const NativeOneKeyImage = getHostComponent<
+  OneKeyImageNativeProps,
+  OneKeyImageMethods
+>('OneKeyImage', () => OneKeyImageConfig);
+
+const nativeCache =
+  NitroModules.createHybridObject<OneKeyImageCacheHybrid>('OneKeyImageCache');
+
+function unwrap<T extends (...args: any[]) => void>(
+  value: MaybeWrappedCallback<T> | undefined
+): T | undefined {
+  return typeof value === 'function' ? value : value?.f;
+}
+
+function normalizeSource(
+  source: OneKeyImageProps['source']
+): OneKeyImageSource | undefined {
+  if (source == null) return undefined;
+  const resolved = Image.resolveAssetSource(source as ImageSourcePropType);
+  if (resolved?.uri?.trim()) {
+    const original =
+      typeof source === 'object' && !Array.isArray(source)
+        ? (source as OneKeyImageSource)
+        : undefined;
+    return {
+      uri: resolved.uri,
+      width: resolved.width,
+      height: resolved.height,
+      scale: resolved.scale,
+      headers: original?.headers,
+      cachePolicy: original?.cachePolicy,
+    };
+  }
+  return undefined;
+}
+
+export function OneKeyImage({
+  source,
+  placeholder,
+  fallback,
+  variant = OneKeyImageVariant.GENERIC,
+  contentFit = OneKeyImageContentFit.COVER,
+  cachePolicy,
+  autoplay,
+  recyclingKey,
+  optimizeTos = true,
+  round = false,
+  resizeWidth,
+  resizeHeight,
+  overscan = 1.1,
+  loadingStrategy = OneKeyImageLoadingStrategy.STATIC,
+  placeholderColor,
+  hybridRef,
+  onLoadStart,
+  onLoad,
+  onDisplay,
+  onError,
+  onLoadEnd,
+  style,
+  ...viewProps
+}: OneKeyImageProps) {
+  const normalized = useMemo(() => normalizeSource(source), [source]);
+  const resolvedCachePolicy =
+    cachePolicy ??
+    normalized?.cachePolicy ??
+    OneKeyImageCachePolicy.MEMORY_DISK;
+  const identity = `${normalized?.uri ?? ''}|${JSON.stringify(
+    normalized?.headers ?? {}
+  )}|${resolvedCachePolicy}|${recyclingKey ?? ''}|${contentFit}|${
+    optimizeTos ? '1' : '0'
+  }|${resizeWidth ?? ''}|${resizeHeight ?? ''}|${overscan}`;
+  const hasSource = normalized != null;
+  const hasOverlay = placeholder != null || fallback != null;
+  type LoadState = {
+    identity: string;
+    status: 'loading' | 'loaded' | 'fallback';
+  };
+  const [loadState, setLoadState] = useState<LoadState>({
+    identity,
+    status: hasSource ? 'loading' : 'fallback',
+  });
+  const effectiveState =
+    loadState.identity === identity
+      ? loadState.status
+      : hasSource
+      ? 'loading'
+      : 'fallback';
+
+  const refs = useRef({
+    hybridRef: unwrap(hybridRef),
+    onLoadStart: unwrap(onLoadStart),
+    onLoad: unwrap(onLoad),
+    onDisplay: unwrap(onDisplay),
+    onError: unwrap(onError),
+    onLoadEnd: unwrap(onLoadEnd),
+  });
+  refs.current = {
+    hybridRef: unwrap(hybridRef),
+    onLoadStart: unwrap(onLoadStart),
+    onLoad: unwrap(onLoad),
+    onDisplay: unwrap(onDisplay),
+    onError: unwrap(onError),
+    onLoadEnd: unwrap(onLoadEnd),
+  };
+  const nativeMethodsRef = useRef<OneKeyImageMethods | null>(null);
+  const pendingOverlayReloadRef = useRef<string | null>(null);
+  const previousRenderRef = useRef({ hasOverlay, identity });
+
+  useEffect(() => {
+    const previous = previousRenderRef.current;
+    const identityChanged = previous.identity !== identity;
+    if (hasOverlay && (!previous.hasOverlay || identityChanged)) {
+      const status = hasSource ? 'loading' : 'fallback';
+      setLoadState({ identity, status });
+    }
+
+    if (hasOverlay && !previous.hasOverlay && !identityChanged && hasSource) {
+      pendingOverlayReloadRef.current = identity;
+      const nativeMethods = nativeMethodsRef.current;
+      if (nativeMethods != null) {
+        pendingOverlayReloadRef.current = null;
+        nativeMethods.reload();
+      }
+    } else if (!hasOverlay || identityChanged) {
+      pendingOverlayReloadRef.current = null;
+    }
+    previousRenderRef.current = { hasOverlay, identity };
+  }, [hasOverlay, hasSource, identity]);
+
+  const needsHybridRef = hasOverlay || refs.current.hybridRef != null;
+  const needsLoadStart = hasOverlay || refs.current.onLoadStart != null;
+  const needsLoad = refs.current.onLoad != null;
+  const needsDisplay = placeholder != null || refs.current.onDisplay != null;
+  const needsError = hasOverlay || refs.current.onError != null;
+  const needsLoadEnd = refs.current.onLoadEnd != null;
+
+  const nativeCallbacks = useMemo(
+    () => ({
+      hybridRef: needsHybridRef
+        ? callback((ref: OneKeyImageMethods) => {
+            nativeMethodsRef.current = ref;
+            if (pendingOverlayReloadRef.current === identity) {
+              pendingOverlayReloadRef.current = null;
+              ref.reload();
+            }
+            refs.current.hybridRef?.(ref);
+          })
+        : undefined,
+      onLoadStart: needsLoadStart
+        ? callback(() => {
+            if (hasOverlay) {
+              setLoadState({ identity, status: 'loading' });
+            }
+            refs.current.onLoadStart?.();
+          })
+        : undefined,
+      onLoad: needsLoad
+        ? callback(
+            (
+              width: number,
+              height: number,
+              cacheType: OneKeyImageNativeCacheType
+            ) => {
+              refs.current.onLoad?.({
+                source: { url: normalized?.uri ?? '', width, height },
+                cacheType: cacheType as OneKeyImageCacheType,
+              });
+            }
+          )
+        : undefined,
+      onDisplay: needsDisplay
+        ? callback(() => {
+            if (placeholder != null) {
+              setLoadState({ identity, status: 'loaded' });
+            }
+            refs.current.onDisplay?.();
+          })
+        : undefined,
+      onError: needsError
+        ? callback((message: string) => {
+            if (hasOverlay) {
+              setLoadState({ identity, status: 'fallback' });
+            }
+            refs.current.onError?.({ error: message });
+          })
+        : undefined,
+      onLoadEnd: needsLoadEnd
+        ? callback(() => refs.current.onLoadEnd?.())
+        : undefined,
+    }),
+    [
+      hasOverlay,
+      identity,
+      needsDisplay,
+      needsError,
+      needsHybridRef,
+      needsLoad,
+      needsLoadEnd,
+      needsLoadStart,
+      normalized?.uri,
+      placeholder,
+    ]
+  );
+
+  const flattenedStyle = StyleSheet.flatten(style);
+  const hasRoundedCorners = Boolean(
+    flattenedStyle &&
+      [
+        flattenedStyle.borderRadius,
+        flattenedStyle.borderTopLeftRadius,
+        flattenedStyle.borderTopRightRadius,
+        flattenedStyle.borderBottomLeftRadius,
+        flattenedStyle.borderBottomRightRadius,
+        flattenedStyle.borderStartStartRadius,
+        flattenedStyle.borderStartEndRadius,
+        flattenedStyle.borderEndStartRadius,
+        flattenedStyle.borderEndEndRadius,
+      ].some((radius) => typeof radius === 'number' && radius > 0)
+  );
+  const shouldWrapNative = hasOverlay || hasRoundedCorners;
+  const borderOverlayStyle =
+    flattenedStyle && hasRoundedCorners
+      ? {
+          borderWidth: flattenedStyle.borderWidth,
+          borderTopWidth: flattenedStyle.borderTopWidth,
+          borderRightWidth: flattenedStyle.borderRightWidth,
+          borderBottomWidth: flattenedStyle.borderBottomWidth,
+          borderLeftWidth: flattenedStyle.borderLeftWidth,
+          borderStartWidth: flattenedStyle.borderStartWidth,
+          borderEndWidth: flattenedStyle.borderEndWidth,
+          borderColor: flattenedStyle.borderColor,
+          borderTopColor: flattenedStyle.borderTopColor,
+          borderRightColor: flattenedStyle.borderRightColor,
+          borderBottomColor: flattenedStyle.borderBottomColor,
+          borderLeftColor: flattenedStyle.borderLeftColor,
+          borderStartColor: flattenedStyle.borderStartColor,
+          borderEndColor: flattenedStyle.borderEndColor,
+          borderStyle: flattenedStyle.borderStyle,
+          borderRadius: flattenedStyle.borderRadius,
+          borderTopLeftRadius: flattenedStyle.borderTopLeftRadius,
+          borderTopRightRadius: flattenedStyle.borderTopRightRadius,
+          borderBottomLeftRadius: flattenedStyle.borderBottomLeftRadius,
+          borderBottomRightRadius: flattenedStyle.borderBottomRightRadius,
+          borderStartStartRadius: flattenedStyle.borderStartStartRadius,
+          borderStartEndRadius: flattenedStyle.borderStartEndRadius,
+          borderEndStartRadius: flattenedStyle.borderEndStartRadius,
+          borderEndEndRadius: flattenedStyle.borderEndEndRadius,
+          zIndex: 1,
+          ...(round ? ROUND_CLIP : null),
+        }
+      : undefined;
+
+  const native = createElement(NativeOneKeyImage, {
+    ...viewProps,
+    ...nativeCallbacks,
+    style: shouldWrapNative ? StyleSheet.absoluteFill : style,
+    sourceUri: normalized?.uri ?? '',
+    sourceHeadersJson: normalized?.headers
+      ? JSON.stringify(normalized.headers)
+      : undefined,
+    variant,
+    contentFit,
+    cachePolicy: resolvedCachePolicy,
+    autoplay: autoplay ?? Platform.OS !== 'android',
+    recyclingKey,
+    optimizeTos,
+    round,
+    resizeWidth,
+    resizeHeight,
+    overscan,
+    loadingStrategy:
+      placeholder == null ? loadingStrategy : OneKeyImageLoadingStrategy.NONE,
+    placeholderColor,
+  });
+
+  if (!shouldWrapNative) return native;
+
+  return (
+    <View
+      style={[
+        style,
+        styles.overlayContainer,
+        hasRoundedCorners ? styles.borderlessContainer : undefined,
+        round ? ROUND_CLIP : undefined,
+      ]}
+      collapsable={false}
+    >
+      {native}
+      {effectiveState === 'loading' && placeholder != null ? (
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          {placeholder}
+        </View>
+      ) : null}
+      {effectiveState === 'fallback' && fallback != null ? (
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          {fallback}
+        </View>
+      ) : null}
+      {borderOverlayStyle ? (
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, borderOverlayStyle]}
+        />
+      ) : null}
+    </View>
+  );
+}
+
+export const OneKeyImageCache = {
+  preload(sources: OneKeyImagePreloadInput[]) {
+    const hasInvalidSource = sources.some((source) => !source.uri?.trim());
+    const validSources = sources.filter(
+      (source): source is OneKeyImagePreloadInput & { uri: string } =>
+        Boolean(source.uri?.trim())
+    );
+    if (validSources.length === 0) return Promise.resolve(false);
+
+    return nativeCache
+      .preload(
+        validSources.map((source) => ({
+          uri: source.uri,
+          headersJson: source.headers
+            ? JSON.stringify(source.headers)
+            : undefined,
+          cachePolicy: source.cachePolicy ?? OneKeyImageCachePolicy.MEMORY_DISK,
+          resizeWidth: source.resizeWidth,
+          resizeHeight: source.resizeHeight,
+          pixelRatio: source.pixelRatio,
+          overscan: source.overscan,
+          optimizeTos: source.optimizeTos,
+        }))
+      )
+      .then((success) => success && !hasInvalidSource);
+  },
+  clearMemory: () => nativeCache.clearMemory(),
+  clearDisk: () => nativeCache.clearDisk(),
+  clearAll: () => nativeCache.clearAll(),
+};
+
+// `round` clips the native view to a circle: an oval path on Android
+// (`OneKeyImage.kt` `addOval`), a `min(width, height) / 2` corner radius on iOS
+// (`OneKeyImage.swift` `updateRoundMask`). The overlay container has to clip the
+// same way, or a custom placeholder or fallback is painted square over a round
+// image. A percentage radius says that without measuring the view, and covers
+// every per-corner radius the caller's own style may have set.
+const ROUND_CLIP = {
+  borderRadius: '50%',
+  borderTopLeftRadius: '50%',
+  borderTopRightRadius: '50%',
+  borderBottomLeftRadius: '50%',
+  borderBottomRightRadius: '50%',
+  borderStartStartRadius: '50%',
+  borderStartEndRadius: '50%',
+  borderEndStartRadius: '50%',
+  borderEndEndRadius: '50%',
+} as const;
+
+const styles = StyleSheet.create({
+  overlayContainer: {
+    overflow: 'hidden',
+  },
+  borderlessContainer: {
+    borderWidth: 0,
+    borderTopWidth: 0,
+    borderRightWidth: 0,
+    borderBottomWidth: 0,
+    borderLeftWidth: 0,
+    borderStartWidth: 0,
+    borderEndWidth: 0,
+  },
+});
