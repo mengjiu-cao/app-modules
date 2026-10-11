@@ -697,6 +697,16 @@ carries an opaque `key`; native returns it unchanged as `actionKey` together wit
 `rowKey`. The existing binding epoch invalidates callbacks during reuse. The
 consumer additionally rejects actions absent from the current binding map.
 
+On Android, clearing an action or binding a disabled action clears its click and
+touch listeners and leaves the child non-clickable. The final clickable state is
+applied after setting the click listener because Android may mark even a null
+listener clickable. Static text and images therefore allow the declared parent
+action to receive taps; an enabled child action keeps its independent hit target.
+Recycled SmartX image slots clear both clickable and focusable state. Binding
+epoch checks, disabled accessibility state and the current action map remain in
+force. This source correction requires focused parent/child tapping and reuse
+acceptance in the consuming App; previous binary evidence does not cover it.
+
 SmartX content validation rejects unknown named slots, invalid enum/boolean values,
 non-finite font scales and non-hex colors before serialization. Colors are
 `#RRGGBB` or `#RRGGBBAA`; the consumer normalizes semantic rgba tokens. Required
