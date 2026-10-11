@@ -3,13 +3,13 @@
   "source": {
     "repository": "https://github.com/mengjiu-cao/app-modules",
     "branch": "arlan/smartx-native-list",
-    "commit": "1579c8119bc235ec019d66ad75210c6f55a34d4b",
+    "commit": "17dc4bd096c4a07aebf8127143ae6180b3719052",
     "upstreamBaseline": "f11ac08bf1278a31345829d9e245015d52035df4",
     "selectedUpstreamCommits": [
       "5e94f3bd057ca054ae14153e1fa893d3ae1d0eb5"
     ],
     "dirty": false,
-    "inputDigest": "f4101bc03366ba0ad9fcc03b7690e203f00b09fb6a9aaf7a1281c0a54eab2d84"
+    "inputDigest": "9f706acdaedf0d0a837094f96545f178077f5c9d5aec5daf96a6107693274942"
   },
   "generators": {
     "node": "v24.21.0",
@@ -103,7 +103,7 @@
     "native-modules/native-logger/src/NativeLogger.nitro.ts": "8017e1ae86d7aac94355cd70c69d41f610688615e508e6440a840542b610e494",
     "native-views/react-native-image/android/build.gradle": "54da4187eda21f0b4015478d4926c7418e4eab1bd7453751af735814cba4e115",
     "native-views/react-native-image/android/CMakeLists.txt": "d6b68c088d58bcb1b79cd0c391bdde4a3aea82589a641973bd611736b9a6c15d",
-    "native-views/react-native-image/android/consumer-rules.pro": "0e4a84261c9027293c3b64f9f80a2e89cdb1d4c94384b193c5dfd12843ba0560",
+    "native-views/react-native-image/android/consumer-rules.pro": "f2e4395c55885093732253e7d24e051d7ffa510236b59169c5bbcfd6242a8cd9",
     "native-views/react-native-image/android/gradle.properties": "6754791cdf8aeb60a84d6c94fa0f41e8ae26a31ac1cc52eaab499d60555f8374",
     "native-views/react-native-image/android/src/main/AndroidManifest.xml": "343d5be1ac17cdd45d1a2f2ddc616c509290e655869125a9422a96d88aa66066",
     "native-views/react-native-image/android/src/main/cpp/cpp-adapter.cpp": "9870c22fa5e750130c7a2c62cc5b9ffab2c1e09d50aaae097fe1886f91e10a3e",
