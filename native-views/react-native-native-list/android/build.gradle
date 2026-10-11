@@ -85,6 +85,10 @@ android {
       java.srcDirs += ["generated/java", "generated/jni"]
     }
   }
+
+  // AsyncListDiffer initializes an unused Handler even when tests supply both
+  // executors. Only the Android bootstrap uses defaults; tests drain real diffs.
+  testOptions { unitTests.returnDefaultValues = true }
 }
 
 repositories {

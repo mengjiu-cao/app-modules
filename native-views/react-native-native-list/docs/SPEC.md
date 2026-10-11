@@ -805,3 +805,23 @@ in the App integration acceptance record. No default renderer switch follows
 from these isolated results.
 
 CJK follow-up: affected UIKit presentation checks pass 10 tests (8 preserved + 2 new); the unchanged system renderer check remains valid. Android adds 3 passing typography checks. These checks still do not replace App rendering or performance acceptance.
+
+### Android final disposal and queued updates (2026-10-11)
+
+Final Fabric drop or explicit Hybrid disposal MUST invalidate queued updates
+before releasing resources. A queued or subsequent Snapshot/Patch must not parse
+or repopulate a disposed host. Final cleanup releases the active/sticky snapshots,
+adapter diff/reorder data, callbacks, and disposed SmartX row payloads and layout
+bookkeeping. Cleanup is idempotent and runs native view operations on the UI
+thread. Temporary detach alone is not final disposal: retained screens may
+reattach with the existing snapshot and renderer state.
+
+A 500-row Release benchmark exhausted the 192 MiB Java heap while parsing a new
+snapshot after repeated mounts. The missing final cleanup and approximately
+6.6 MB serialized SmartX snapshot are confirmed observations; they do not by
+themselves establish the retaining GC root or prove the OOM is fixed. Acceptance
+requires the final Release to survive repeated mounts and the unchanged 500-row
+performance workload without sustained retained-heap growth. The lifecycle fix is
+implemented, with three final-lifetime gate tests and two real AndroidX
+AsyncListDiffer cancellation tests passing. Final App runtime and memory
+verification remain pending.

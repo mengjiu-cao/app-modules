@@ -1,5 +1,6 @@
 package com.margelo.nitro.nativelist
 
+import android.os.Handler
 import android.os.Looper
 import android.view.View
 import com.facebook.proguard.annotations.DoNotStrip
@@ -8,6 +9,8 @@ import com.facebook.react.uimanager.ThemedReactContext
 @DoNotStrip
 class HybridNativeList(context: ThemedReactContext) : HybridNativeListSpec() {
   private val hostView = NativeListView(context)
+  private val lifetime = NativeListLifetimeGate()
+  private val uiHandler = Handler(Looper.getMainLooper())
 
   override val view: View = hostView
 
@@ -15,12 +18,14 @@ class HybridNativeList(context: ThemedReactContext) : HybridNativeListSpec() {
     set(value) {
       if (field == value) return
       field = value
+      if (!lifetime.isAlive) { field = ""; return }
       dispatchToUi { hostView.setScrollPositionThresholdsJson(value) }
     }
 
   override var onScrollPositionThresholdChange: ((isBeyondThreshold: Boolean) -> Unit)? = null
     set(value) {
       field = value
+      if (!lifetime.isAlive) { field = null; return }
       dispatchToUi { hostView.onScrollPositionThresholdChange = value }
     }
 
@@ -28,12 +33,14 @@ class HybridNativeList(context: ThemedReactContext) : HybridNativeListSpec() {
     set(value) {
       if (field == value) return
       field = value
+      if (!lifetime.isAlive) { field = "[]"; return }
       dispatchToUi { hostView.setContainerSlotHeightsJson(value) }
     }
 
   override var onScrollMetrics: ((payloadJson: String) -> Unit)? = null
     set(value) {
       field = value
+      if (!lifetime.isAlive) { field = null; return }
       dispatchToUi { hostView.onScrollMetrics = value }
     }
 
@@ -42,11 +49,13 @@ class HybridNativeList(context: ThemedReactContext) : HybridNativeListSpec() {
     set(value) {
       if (field == value) return
       field = value
+      if (!lifetime.isAlive) { field = ""; return }
       dispatchToUi { hostView.applySnapshot(value) }
     }
 
   override var keyboardDismissMode: NativeListKeyboardDismissMode = NativeListKeyboardDismissMode.NONE
     set(value) {
+      if (!lifetime.isAlive) return
       if (field == value) return
       field = value
       dispatchToUi { hostView.keyboardDismissMode = value }
@@ -55,23 +64,48 @@ class HybridNativeList(context: ThemedReactContext) : HybridNativeListSpec() {
   override var keyboardShouldPersistTaps: NativeListKeyboardShouldPersistTaps =
     NativeListKeyboardShouldPersistTaps.NEVER
     set(value) {
+      if (!lifetime.isAlive) return
       if (field == value) return
       field = value
       dispatchToUi { hostView.keyboardShouldPersistTaps = value }
     }
 
   override var onRowAction: ((payloadJson: String) -> Unit)? = null
-    set(value) { field = value; hostView.onRowAction = value }
+    set(value) {
+      field = value
+      if (!lifetime.isAlive) { field = null; return }
+      dispatchToUi { hostView.onRowAction = value }
+    }
   override var onActionAnchorInvalidated: ((payloadJson: String) -> Unit)? = null
-    set(value) { field = value; hostView.onActionAnchorInvalidated = value }
+    set(value) {
+      field = value
+      if (!lifetime.isAlive) { field = null; return }
+      dispatchToUi { hostView.onActionAnchorInvalidated = value }
+    }
   override var onSelectionDelta: ((payloadJson: String) -> Unit)? = null
-    set(value) { field = value; hostView.onSelectionDelta = value }
+    set(value) {
+      field = value
+      if (!lifetime.isAlive) { field = null; return }
+      dispatchToUi { hostView.onSelectionDelta = value }
+    }
   override var onReorder: ((payloadJson: String) -> Unit)? = null
-    set(value) { field = value; hostView.onReorder = value }
+    set(value) {
+      field = value
+      if (!lifetime.isAlive) { field = null; return }
+      dispatchToUi { hostView.onReorder = value }
+    }
   override var onEndReached: ((payloadJson: String) -> Unit)? = null
-    set(value) { field = value; hostView.onEndReached = value }
+    set(value) {
+      field = value
+      if (!lifetime.isAlive) { field = null; return }
+      dispatchToUi { hostView.onEndReached = value }
+    }
   override var onVisibleRangeChanged: ((payloadJson: String) -> Unit)? = null
-    set(value) { field = value; hostView.onVisibleRangeChanged = value }
+    set(value) {
+      field = value
+      if (!lifetime.isAlive) { field = null; return }
+      dispatchToUi { hostView.onVisibleRangeChanged = value }
+    }
 
   override fun applySnapshot(snapshotJson: String) {
     dispatchToUi { hostView.applySnapshot(snapshotJson) }
@@ -140,12 +174,12 @@ class HybridNativeList(context: ThemedReactContext) : HybridNativeListSpec() {
   }
 
   override fun onDropView() {
-    hostView.dispose()
+    disposeView()
     super.onDropView()
   }
 
   override fun dispose() {
-    hostView.dispose()
+    disposeView()
     super.dispose()
   }
 
@@ -154,7 +188,28 @@ class HybridNativeList(context: ThemedReactContext) : HybridNativeListSpec() {
    * during a UI commit; only off-main calls need to be posted to this host.
    */
   private fun dispatchToUi(action: () -> Unit) {
-    if (Looper.myLooper() == Looper.getMainLooper()) action() else hostView.post(action)
+    if (!lifetime.isAlive) return
+    val guarded = lifetime.guarded(action)
+    if (Looper.myLooper() == Looper.getMainLooper()) guarded.run() else uiHandler.post(guarded)
+  }
+
+  private fun disposeView() {
+    if (!lifetime.close()) return
+    uiHandler.removeCallbacksAndMessages(null)
+    // Release JS callbacks and declarative payloads even if the Hybrid wrapper is retained.
+    snapshotJson = ""
+    scrollPositionThresholdsJson = ""
+    containerSlotHeightsJson = "[]"
+    onScrollMetrics = null
+    onScrollPositionThresholdChange = null
+    onRowAction = null
+    onActionAnchorInvalidated = null
+    onSelectionDelta = null
+    onReorder = null
+    onEndReached = null
+    onVisibleRangeChanged = null
+    if (Looper.myLooper() == Looper.getMainLooper()) hostView.dispose()
+    else uiHandler.post { hostView.dispose() }
   }
 
   private fun NativeListScrollAlignment.stringValue(): String = when (this) {

@@ -19,25 +19,26 @@ internal class NativeListViewHolder(val rowView: NativeListRowHost) :
 internal class NativeListAdapter(
   private val context: ThemedReactContext,
 ) : RecyclerView.Adapter<NativeListViewHolder>() {
+  private val lifetime = NativeListLifetimeGate()
   private var suppressDifferUpdates = false
   private var needsThemeRebind = false
   private var reorderItems: MutableList<NativeListItem>? = null
   private val differ = AsyncListDiffer(
     object : ListUpdateCallback {
       override fun onInserted(position: Int, count: Int) {
-        if (!suppressDifferUpdates) notifyItemRangeInserted(position, count)
+        if (lifetime.isAlive && !suppressDifferUpdates) notifyItemRangeInserted(position, count)
       }
 
       override fun onRemoved(position: Int, count: Int) {
-        if (!suppressDifferUpdates) notifyItemRangeRemoved(position, count)
+        if (lifetime.isAlive && !suppressDifferUpdates) notifyItemRangeRemoved(position, count)
       }
 
       override fun onMoved(fromPosition: Int, toPosition: Int) {
-        if (!suppressDifferUpdates) notifyItemMoved(fromPosition, toPosition)
+        if (lifetime.isAlive && !suppressDifferUpdates) notifyItemMoved(fromPosition, toPosition)
       }
 
       override fun onChanged(position: Int, count: Int, payload: Any?) {
-        if (!suppressDifferUpdates) notifyItemRangeChanged(position, count, payload)
+        if (lifetime.isAlive && !suppressDifferUpdates) notifyItemRangeChanged(position, count, payload)
       }
     },
     AsyncDifferConfig.Builder(DIFF).build(),
@@ -52,6 +53,7 @@ internal class NativeListAdapter(
   var usesSelectorSourceScale = false
   var theme: JSONObject? = null
     set(value) {
+      if (!lifetime.isAlive && value != null) return
       if (field?.toString() != value?.toString()) needsThemeRebind = true
       field = value
     }
@@ -59,16 +61,22 @@ internal class NativeListAdapter(
   // changed list style would otherwise not reach rows DiffUtil considers equal.
   var listStyle: JSONObject? = null
     set(value) {
+      if (!lifetime.isAlive && value != null) return
       if (field?.toString() != value?.toString()) needsThemeRebind = true
       field = value
     }
   var layout: String = "linear"
   var orientation: String = "vertical"
   var selectedKeys: Set<String> = emptySet()
-  var checkboxState: (NativeListItem, NativeSelectionTarget?, String) -> String = { _, _, fallback -> fallback }
+    set(value) { field = if (lifetime.isAlive) value else emptySet() }
+  var checkboxState: (NativeListItem, NativeSelectionTarget?, String) -> String = DEFAULT_CHECKBOX_STATE
+    set(value) { field = if (lifetime.isAlive) value else DEFAULT_CHECKBOX_STATE }
   var onRowPress: ((NativeListItem, NativeListActionOrigin) -> Unit)? = null
+    set(value) { field = if (lifetime.isAlive) value else null }
   var onAction: ((NativeListItem, String, NativeSelectionTarget?, NativeListActionOrigin?) -> Unit)? = null
+    set(value) { field = if (lifetime.isAlive) value else null }
   var onBindingInvalidated: ((NativeListRowHost, Long) -> Unit)? = null
+    set(value) { field = if (lifetime.isAlive) value else null }
 
   override fun getItemCount(): Int = reorderItems?.size ?: differ.currentList.size
 
@@ -91,6 +99,7 @@ internal class NativeListAdapter(
   }
 
   override fun onBindViewHolder(holder: NativeListViewHolder, position: Int) {
+    if (!lifetime.isAlive) return
     val item = itemAt(position) ?: return
     holder.rowView.listStyle = listStyle
     holder.rowView.bind(
@@ -110,6 +119,7 @@ internal class NativeListAdapter(
     position: Int,
     payloads: MutableList<Any>,
   ) {
+    if (!lifetime.isAlive) return
     if (payloads.isNotEmpty() && payloads.all { it == MARKET_QUOTE_PAYLOAD }) {
       itemAt(position)?.let { holder.rowView.bindMarketQuote(it, theme) }
       return
@@ -142,6 +152,7 @@ internal class NativeListAdapter(
 
   // OneKey patch: Yoga rounds badge dimensions from unrounded cumulative row edges.
   fun marketSourceEdgePx(position: Int): Double {
+    if (!lifetime.isAlive) return 0.0
     val items = reorderItems ?: differ.currentList
     if (marketSourceItems !== items) {
       val density = context.resources.displayMetrics.density.toDouble()
@@ -168,13 +179,15 @@ internal class NativeListAdapter(
     (reorderItems ?: differ.currentList).indexOfFirst { it.key == key }
 
   fun submitList(items: List<NativeListItem>, commitCallback: (() -> Unit)? = null) {
+    if (!lifetime.isAlive) return
     // A newer submission can discard the reorder diff and its completion callback.
     suppressDifferUpdates = false
     if (reorderItems != null) {
       reorderItems = null
       notifyDataSetChanged()
     }
-    differ.submitList(items.toList()) {
+    differ.submitList(items.toList()) commit@ {
+      if (!lifetime.isAlive) return@commit
       // Retain this invalidation across superseded submissions, even when rows are unchanged.
       if (needsThemeRebind) {
         needsThemeRebind = false
@@ -185,6 +198,7 @@ internal class NativeListAdapter(
   }
 
   fun moveReordered(from: Int, to: Int): List<NativeListItem>? {
+    if (!lifetime.isAlive) return null
     val items = reorderItems ?: differ.currentList.toMutableList().also { reorderItems = it }
     if (from !in items.indices || to !in items.indices) return null
     val moved = items.removeAt(from)
@@ -194,9 +208,11 @@ internal class NativeListAdapter(
   }
 
   fun commitReordered(items: List<NativeListItem>, commitCallback: () -> Unit) {
+    if (!lifetime.isAlive) return
     val committed = items.toList()
     suppressDifferUpdates = true
-    differ.submitList(committed) {
+    differ.submitList(committed) commit@ {
+      if (!lifetime.isAlive) return@commit
       reorderItems = null
       suppressDifferUpdates = false
       commitCallback()
@@ -204,6 +220,7 @@ internal class NativeListAdapter(
   }
 
   fun cancelReorder() {
+    if (!lifetime.isAlive) return
     suppressDifferUpdates = false
     if (reorderItems == null) return
     reorderItems = null
@@ -211,15 +228,35 @@ internal class NativeListAdapter(
   }
 
   fun dispose() {
+    if (!lifetime.close()) return
+    // null clears the committed list synchronously and advances AsyncListDiffer's
+    // generation, so an in-flight diff cannot restore rows after final disposal.
+    differ.submitList(null)
     marketSourceItems = null
     marketSourceEdges = DoubleArray(0)
     reorderItems = null
     suppressDifferUpdates = false
-    createdRows.forEach(NativeListRowHost::dispose)
+    theme = null
+    listStyle = null
+    needsThemeRebind = false
+    selectedKeys = emptySet()
+    checkboxState = DEFAULT_CHECKBOX_STATE
+    onRowPress = null
+    onAction = null
+    onBindingInvalidated = null
+    createdRows.forEach { row ->
+      row.onRowPress = null
+      row.onAction = null
+      row.onBindingInvalidated = null
+      row.listStyle = null
+      row.dispose()
+    }
     createdRows.clear()
   }
 
   companion object {
+    private val DEFAULT_CHECKBOX_STATE: (NativeListItem, NativeSelectionTarget?, String) -> String =
+      { _, _, fallback -> fallback }
     private val DIFF = object : DiffUtil.ItemCallback<NativeListItem>() {
       override fun areItemsTheSame(oldItem: NativeListItem, newItem: NativeListItem): Boolean =
         oldItem.key == newItem.key

@@ -752,6 +752,14 @@ internal class NativeListSmartXRowView(context: ThemedReactContext) :
     images.values.forEach { it.dispose() }
     images.clear()
     nodes.clear()
+    orders.clear()
+    used.clear()
+    usedImages.clear()
+    payload = JSONObject()
+    palette = JSONObject()
+    assets = JSONObject()
+    rowKey = ""
+    rowType = ""
     removeAllViews()
   }
 }
