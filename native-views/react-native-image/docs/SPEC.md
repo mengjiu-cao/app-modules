@@ -293,3 +293,7 @@ The implementation is complete on iOS and Android. Source tests and native
 builds verify the implementation at their respective layers. Simulator or device
 runs add rendered lifecycle and visual acceptance evidence; missing acceptance
 evidence does not indicate missing implementation.
+
+### SmartX data-URI SVG compatibility (2026-10-11)
+
+Android data-URI fetching produces ByteBuffer. The Glide registry must expose both InputStream→SVG→Drawable and ByteBuffer→SVG→Drawable paths. The buffer decoder delegates to the existing SVG parser and sizing using a read-only duplicate, preserving the original position/limit, direct buffers and error propagation. Request identity, cancellation, caching, raster/animated formats and drawing behavior remain unchanged. Three JVM checks cover both registered load paths and buffer delegation; actual image display remains a device acceptance check.
