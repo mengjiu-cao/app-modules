@@ -3,13 +3,13 @@
   "source": {
     "repository": "https://github.com/mengjiu-cao/app-modules",
     "branch": "arlan/smartx-native-list",
-    "commit": "17dc4bd096c4a07aebf8127143ae6180b3719052",
+    "commit": "9ead2998c3292338b8335957bd05bb724ad28f1f",
     "upstreamBaseline": "f11ac08bf1278a31345829d9e245015d52035df4",
     "selectedUpstreamCommits": [
       "5e94f3bd057ca054ae14153e1fa893d3ae1d0eb5"
     ],
     "dirty": false,
-    "inputDigest": "9f706acdaedf0d0a837094f96545f178077f5c9d5aec5daf96a6107693274942"
+    "inputDigest": "d809eeceaec2e160abd2419ebfc1bc92799525989d695ad6452120fa2a190781"
   },
   "generators": {
     "node": "v24.21.0",
@@ -35,7 +35,7 @@
       "name": "@onekeyfe/react-native-image",
       "path": "native-views/react-native-image",
       "version": "3.0.165",
-      "files": 202
+      "files": 204
     },
     {
       "name": "@onekeyfe/react-native-native-list",
@@ -110,6 +110,7 @@
     "native-views/react-native-image/android/src/main/java/com/margelo/nitro/onekeyimage/OneKeyBlockieAvatar.kt": "425f0df0d5afe015d5be1d8e8cfc4fac567c4aea491696a05478f5eb3dacfbe3",
     "native-views/react-native-image/android/src/main/java/com/margelo/nitro/onekeyimage/OneKeyBlockieAvatarLoader.kt": "fed0149d2e962b02127b6fd31f892a82ce3c9926831ba220bc6d5c5bc2155e22",
     "native-views/react-native-image/android/src/main/java/com/margelo/nitro/onekeyimage/OneKeyImage.kt": "25faa621cd59d0e4789f29a250ba71736887f57525b8e897f4ccc089a5cdc55f",
+    "native-views/react-native-image/android/src/main/java/com/margelo/nitro/onekeyimage/OneKeyImageAndroidResourceUri.kt": "c5a58b0e1b2864c3363bf27efbfac32c16573d9e64d36f7fc31940b418075f79",
     "native-views/react-native-image/android/src/main/java/com/margelo/nitro/onekeyimage/OneKeyImageCache.kt": "40a082521c6d11072bc289e3490a0da900feff8e58f08a5d12fbf2f00b2a4ff1",
     "native-views/react-native-image/android/src/main/java/com/margelo/nitro/onekeyimage/OneKeyImageDecodeDimensions.kt": "add85318396a40848ddc8ed7d03ebe4d8d46af73939c8ebfd4f59af9c6a30ed7",
     "native-views/react-native-image/android/src/main/java/com/margelo/nitro/onekeyimage/OneKeyImageGlideRegistry.kt": "4eacb625885d24fdbb3714a27bf3e09bb84019ae32a56068584fe9f0afb4ad53",
@@ -117,12 +118,13 @@
     "native-views/react-native-image/android/src/main/java/com/margelo/nitro/onekeyimage/OneKeyImageModel.kt": "eb4549f01712ed1d264d41813d401a7350f2da7fef956ca34cc17fb01b5d6aaf",
     "native-views/react-native-image/android/src/main/java/com/margelo/nitro/onekeyimage/OneKeyImagePackage.kt": "30597a98be2c6a888c44587de78acb592c15e9b2025792a9fd1e1b8a6fc6d402",
     "native-views/react-native-image/android/src/main/java/com/margelo/nitro/onekeyimage/OneKeyImageReusableView.kt": "597c71dee289f90f3c0b0a204c180efbfe75734389467ba563caa71583a42a6c",
-    "native-views/react-native-image/android/src/main/java/com/margelo/nitro/onekeyimage/OneKeyImageSafety.kt": "c2737d2294810f75ecc176ace8d171f6042761ffc4ab650929980202796e60b5",
+    "native-views/react-native-image/android/src/main/java/com/margelo/nitro/onekeyimage/OneKeyImageSafety.kt": "705e84a6a24c0542daceb5b8aa05d0592eab9b7efb29e9e5c289b204f849b20b",
     "native-views/react-native-image/android/src/main/java/com/margelo/nitro/onekeyimage/OneKeyImageSvgDecoder.kt": "4e357d7233875bc8c020e6fb4faddaf6baacd0c5022fd45d3871ff5de6c22c60",
     "native-views/react-native-image/android/src/main/java/com/margelo/nitro/onekeyimage/OneKeyTosUrl.kt": "afd0f3d6e734cc51b458809e0e70b2325707dacb2a59081841f95be157acbd3a",
     "native-views/react-native-image/android/src/test/java/com/margelo/nitro/onekeyimage/OneKeyAnimationTimelineInspectorTest.kt": "27a62cb2974fbf163457779a7bfbdb40d82bdcab90695bae8736798427a540cc",
     "native-views/react-native-image/android/src/test/java/com/margelo/nitro/onekeyimage/OneKeyBlockieAvatarLoaderTest.kt": "836d27480b2be89118be421a3eb729279e934d29eed6073f29928a0b0e4ad9e6",
     "native-views/react-native-image/android/src/test/java/com/margelo/nitro/onekeyimage/OneKeyBlockieAvatarTest.kt": "4e830ee6fb556fe6f5fd0225800a125c06b638854f931b6be9d15f9e82b7d785",
+    "native-views/react-native-image/android/src/test/java/com/margelo/nitro/onekeyimage/OneKeyImageAndroidResourceUriTest.kt": "dd387ee7f16dc7d2e2e0a10c2dc086047734f84f0ffb26d3bb7fdcae8694d49f",
     "native-views/react-native-image/android/src/test/java/com/margelo/nitro/onekeyimage/OneKeyImageCacheTypeTest.kt": "1bc86c915ea819fcd821e6ef59ff6a78df130fba3dba0dfc1ef6b8afdc6acbdc",
     "native-views/react-native-image/android/src/test/java/com/margelo/nitro/onekeyimage/OneKeyImageDecodeDimensionsTest.kt": "7daa05afcfd10b77832a40014c108619e003fab854ae3015a32a50ee3613e83d",
     "native-views/react-native-image/android/src/test/java/com/margelo/nitro/onekeyimage/OneKeyImageMemoryVariantsTest.kt": "2ce78fdfc60431b6e8d377f9b0dbb164bb7ae72253333d671726b71cb0f0f6dc",
