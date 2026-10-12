@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 export const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-export const upstreamBaseline = 'f11ac08bf1278a31345829d9e245015d52035df4';
+export const upstreamBaseline = 'd357a1790298e011415c77b2df8d9f7bbbede595';
 export const packages = [
   { name: '@onekeyfe/react-native-native-logger', path: 'native-modules/native-logger' },
   { name: '@onekeyfe/react-native-skeleton', path: 'native-views/react-native-skeleton' },
